@@ -1,1 +1,0 @@
-add_library(dstructs bar.h bar.cpp)

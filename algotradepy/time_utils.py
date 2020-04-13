@@ -1,0 +1,44 @@
+from datetime import date, time, timedelta, datetime
+from typing import List
+
+import pandas_market_calendars as pmc
+import pandas as pd
+
+
+def generate_trading_days(start_date: date, end_date: date) -> List[date]:
+    nyse = pmc.get_calendar("NYSE")
+    schedule = nyse.schedule(start_date=start_date, end_date=end_date)
+    dates = schedule.index.date.tolist()
+    return dates
+
+
+def generate_trading_schedule(
+        start_date: date,
+        end_date: date,
+) -> pd.DataFrame:
+    nyse = pmc.get_calendar("NYSE")
+    schedule = nyse.schedule(start_date=start_date, end_date=end_date)
+    schedule.loc[:, "market_open"] = schedule["market_open"].apply(
+        lambda x: x.tz_convert("America/New_York").time()
+    )
+    schedule.loc[:, "market_close"] = schedule["market_close"].apply(
+        lambda x: x.tz_convert("America/New_York").time()
+    )
+    schedule.index = schedule.index.date
+    return schedule
+
+
+def time_arithmetic(
+        start_time: time,
+        delta: timedelta,
+) -> time:
+    dt = datetime.combine(date.today(), start_time)
+    res_dt = dt + delta
+
+    if dt.date() != res_dt.date():
+        raise ValueError(
+            f"Undefined behaviour when adding {delta} to {start_time}."
+        )
+
+    end_time = res_dt.time()
+    return end_time

@@ -21,7 +21,6 @@ setup(
         "pandas_datareader>=0.4.0",
         "requests",
         "pandas_market_calendars==1.2",
-        "pyfakefs==4.0.2",
     ],
     extra_requires={
         "dev": [

@@ -28,6 +28,16 @@ def generate_trading_schedule(
     return schedule
 
 
+def get_next_trading_date(base_date: date) -> date:
+    end_date = base_date + timedelta(days=5)
+    schedule = generate_trading_schedule(
+        start_date=base_date,
+        end_date=end_date,
+    )
+    target_date = schedule.iloc[1].name
+    return target_date
+
+
 def time_arithmetic(
         start_time: time,
         delta: timedelta,

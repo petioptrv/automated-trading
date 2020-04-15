@@ -23,9 +23,9 @@ def test_simulation_clock_single_day_1min_res():
     assert clock.date == date(2020, 1, 2)
     assert clock.time == time(9, 30)
 
-    [clock.tick() for _ in range(389)]
+    [clock.tick() for _ in range(390)]
 
-    assert clock.time == time(15, 59)
+    assert clock.time == time(16)
     with pytest.raises(SimulationEndException):
         clock.tick()
 
@@ -37,9 +37,9 @@ def test_simulation_clock_single_day_10min_res():
         simulation_time_step=timedelta(minutes=10),
     )
 
-    [clock.tick() for _ in range(38)]
+    [clock.tick() for _ in range(39)]
 
-    assert clock.time == time(15, 50)
+    assert clock.time == time(16)
     with pytest.raises(SimulationEndException):
         clock.tick()
 
@@ -54,12 +54,11 @@ def test_simulation_clock_real_time():
 
     t1 = real_time.time()
 
-    with pytest.raises(SimulationEndException):
-        [clock.tick() for _ in range(13)]
+    [clock.tick() for _ in range(2)]
 
     t2 = real_time.time()
 
-    assert np.isclose(t2 - t1, 13, atol=.1)
+    assert np.isclose(t2 - t1, 2, atol=.1)
 
 
 def test_simulation_clock_multi_day():
@@ -69,9 +68,9 @@ def test_simulation_clock_multi_day():
         simulation_time_step=timedelta(minutes=30),
     )
 
-    [clock.tick() for _ in range(25)]
+    [clock.tick() for _ in range(26)]
 
-    assert clock.time == time(15, 30)
+    assert clock.time == time(16)
     assert clock.date == date(2020, 1, 3)
     with pytest.raises(SimulationEndException):
         clock.tick()
@@ -84,9 +83,9 @@ def test_simulation_clock_multi_day_weekend():
         simulation_time_step=timedelta(minutes=30),
     )
 
-    [clock.tick() for _ in range(25)]
+    [clock.tick() for _ in range(26)]
 
-    assert clock.time == time(15, 30)
+    assert clock.time == time(16)
     assert clock.date == date(2020, 1, 6)
     with pytest.raises(SimulationEndException):
         clock.tick()
@@ -99,9 +98,9 @@ def test_simulation_clock_daily():
         simulation_time_step=timedelta(days=1),
     )
 
-    [clock.tick() for _ in range(2)]
+    [clock.tick() for _ in range(3)]
 
-    assert clock.time == time(9, 30)
+    assert clock.time == time(16)
     assert clock.date == date(2020, 1, 8)
     with pytest.raises(SimulationEndException):
         clock.tick()
@@ -155,16 +154,13 @@ def test_simulation_clock_reverse_date(sim_clock):
 
 
 def test_simulation_broker_init():
-    sim_clock = SimulationClock(
-        start_date=date(2020, 4, 6),
-        end_date=date(2020, 4, 6),
-        simulation_time_step=timedelta(minutes=15),
-    )
     broker = SimulationBroker(
         starting_funds=1_000,
         transaction_cost=1,
-        sim_clock=sim_clock,
         hist_retriever=HistoricalRetriever(hist_data_dir=TEST_DATA_DIR),
+        start_date=date(2020, 4, 6),
+        end_date=date(2020, 4, 6),
+        simulation_time_step=timedelta(minutes=15),
     )
 
     assert broker.acc_cash == 1_000
@@ -173,42 +169,41 @@ def test_simulation_broker_init():
 
 
 @pytest.fixture
-def sim_broker():
-    sim_clock = SimulationClock(
-        start_date=date(2020, 4, 6),
-        end_date=date(2020, 4, 6),
-        simulation_time_step=timedelta(minutes=15),
-    )
+def sim_broker_15m():
     broker = SimulationBroker(
         starting_funds=1_000,
         transaction_cost=1,
-        sim_clock=sim_clock,
         hist_retriever=HistoricalRetriever(hist_data_dir=TEST_DATA_DIR),
+        start_date=date(2020, 4, 6),
+        end_date=date(2020, 4, 7),
+        simulation_time_step=timedelta(minutes=15),
     )
     return broker
 
 
-def test_simulation_broker_buy(sim_broker):
-    broker = sim_broker
+def test_simulation_broker_buy(sim_broker_15m):
+    broker = sim_broker_15m
 
     assert broker.get_position("SPY") == 0
 
+    broker._clock.tick()  # TODO: remove use of implementation details
     broker.buy(symbol="SPY", n_shares=1)
 
-    spy_2020_4_6_9_30_close = 257.77
+    spy_2020_4_6_9_45_open = 257.78
 
     assert np.isclose(
         broker.acc_cash,
-        1000 - spy_2020_4_6_9_30_close - 1,
+        1000 - spy_2020_4_6_9_45_open - 1,
     )
     assert broker.get_position("SPY") == 1
 
 
-def test_simulation_broker_sell(sim_broker):
-    broker = sim_broker
+def test_simulation_broker_sell(sim_broker_15m):
+    broker = sim_broker_15m
 
     assert broker.get_position("SPY") == 0
 
+    broker._clock.tick()  # TODO: remove use of implementation details
     broker.sell(symbol="SPY", n_shares=1)
 
     spy_2020_4_6_9_30_close = 257.77
@@ -220,31 +215,71 @@ def test_simulation_broker_sell(sim_broker):
     )
 
 
-@pytest.fixture
-def bar_checker():
-    hist_retriever = HistoricalRetriever(hist_data_dir=TEST_DATA_DIR)
-    sim_data = hist_retriever.retrieve_bar_data(
-        symbol="SPY",
-        bar_size=timedelta(minutes=15),
+class BarChecker:
+    def __init__(
+            self,
+            start_date: date,
+            end_date: date,
+            bar_size: timedelta
+    ):
+        hist_retriever = HistoricalRetriever(hist_data_dir=TEST_DATA_DIR)
+        self._sim_data = hist_retriever.retrieve_bar_data(
+            symbol="SPY",
+            bar_size=bar_size,
+            start_date=start_date,
+            end_date=end_date,
+            cache_only=True,
+        )
+        self._sim_idx = 0
+
+    def step(self, bar):
+        assert np.all(bar == self._sim_data.iloc[self._sim_idx])
+        self._sim_idx += 1
+
+    def assert_all_received(self):
+        assert self._sim_idx == len(self._sim_data)
+
+
+def test_simulation_broker_register_same_bar_size(sim_broker_15m):
+    checker = BarChecker(
         start_date=date(2020, 4, 6),
-        end_date=date(2020, 4, 6),
-        cache_only=True,
+        end_date=date(2020, 4, 7),
+        bar_size=timedelta(minutes=15),
     )
-
-    sim_idx = 0
-
-    def step(bar):
-        nonlocal sim_idx
-        assert np.all(bar == sim_data.iloc[sim_idx])
-        sim_idx += 1
-
-    return step
-
-
-def test_simulation_broker_register_same_bar_size(sim_broker, bar_checker):
-    sim_broker.register_for_bars(
+    sim_broker_15m.register_for_bars(
         symbol="SPY",
         bar_size=timedelta(minutes=15),
-        func=bar_checker,
+        func=checker.step,
     )
-    sim_broker.run_sim()
+    sim_broker_15m.run_sim()
+    checker.assert_all_received()
+
+
+def test_simulation_broker_register_diff_bar_size(sim_broker_15m):
+    checker = BarChecker(
+        start_date=date(2020, 4, 6),
+        end_date=date(2020, 4, 7),
+        bar_size=timedelta(minutes=30),
+    )
+    sim_broker_15m.register_for_bars(
+        symbol="SPY",
+        bar_size=timedelta(minutes=30),
+        func=checker.step,
+    )
+    sim_broker_15m.run_sim()
+    checker.assert_all_received()
+
+
+def test_simulation_broker_register_daily(sim_broker_15m):
+    checker = BarChecker(
+        start_date=date(2020, 4, 6),
+        end_date=date(2020, 4, 7),
+        bar_size=timedelta(days=1),
+    )
+    sim_broker_15m.register_for_bars(
+        symbol="SPY",
+        bar_size=timedelta(days=1),
+        func=checker.step,
+    )
+    sim_broker_15m.run_sim()
+    checker.assert_all_received()

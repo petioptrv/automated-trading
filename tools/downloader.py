@@ -6,10 +6,10 @@ from algotradepy.historical.providers import YahooProvider
 if __name__ == "__main__":
     provider = YahooProvider()
     hr = HistoricalRetriever(provider=provider)
-    end_date = date(2020, 3, 11) - timedelta(days=0)
+    end_date = date.today()
     hr.retrieve_bar_data(
         symbol="SPY",
-        bar_size=timedelta(minutes=1),
-        start_date=end_date-timedelta(days=6),
+        bar_size=timedelta(days=1),
+        start_date=date(2000, 1, 1),
         end_date=end_date,
     )

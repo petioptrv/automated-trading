@@ -23,14 +23,14 @@ class State(Enum):
     BELOW_LOWER = 3
 
 
-class SMETrader:
+class SMATrader:
     def __init__(
             self,
             broker: ABroker,
             symbol: str,
             bar_size: timedelta,
             window: int,
-            sme_offset: float,
+            sma_offset: float,
             entry_n_shares: int,
             exit_start: Optional[time] = None,
             full_exit: Optional[time] = None,
@@ -40,7 +40,7 @@ class SMETrader:
             symbol=symbol,
             bar_size=bar_size,
             window=window,
-            sme_offset=sme_offset,
+            sma_offset=sma_offset,
             entry_n_shares=entry_n_shares,
             exit_start=exit_start,
             full_exit=full_exit,
@@ -50,7 +50,7 @@ class SMETrader:
         self._symbol = symbol
         self._bar_size = bar_size
 
-        self._sme_offset = sme_offset
+        self._sma_offset = sma_offset
         self._entry_n_shares = entry_n_shares
         self._daily = is_daily(bar_size=bar_size)
         self._exit_start = exit_start
@@ -59,8 +59,8 @@ class SMETrader:
 
         self._started = False
         self._halted = False
-        self._sme_buffer = np.full((window,), np.nan)
-        self._sme = None
+        self._sma_buffer = np.full((window,), np.nan)
+        self._sma = None
         self._upper = None
         self._lower = None
         self._bar_count = 0
@@ -69,7 +69,7 @@ class SMETrader:
 
     @property
     def _sme_available(self) -> bool:
-        sme_available = not np.any(np.isnan(self._sme_buffer))
+        sme_available = not np.any(np.isnan(self._sma_buffer))
         return sme_available
 
     def start(self):
@@ -95,14 +95,14 @@ class SMETrader:
             self._maybe_execute_logic(bar=bar)
             self._update_price_state(bar=bar)
 
-        self._update_sme(bar=bar)
+        self._update_sma(bar=bar)
 
-    def _update_sme(self, bar: pd.Series):
-        bar_index = self._bar_count % len(self._sme_buffer)
-        self._sme_buffer[bar_index] = bar["close"]
-        self._sme = self._sme_buffer.mean()
-        self._upper = self._sme * (1 + self._sme_offset)
-        self._lower = self._sme * (1 - self._sme_offset)
+    def _update_sma(self, bar: pd.Series):
+        bar_index = self._bar_count % len(self._sma_buffer)
+        self._sma_buffer[bar_index] = bar["close"]
+        self._sma = self._sma_buffer.mean()
+        self._upper = self._sma * (1 + self._sma_offset)
+        self._lower = self._sma * (1 - self._sma_offset)
         self._bar_count += 1
 
     def _maybe_execute_logic(self, bar: pd.Series):
@@ -131,7 +131,7 @@ class SMETrader:
                 position = 0
             if position == 0 and not closing_time:
                 self._open_long()
-        elif bar["close"] >= self._sme:
+        elif bar["close"] >= self._sma:
             if position > 0:
                 self._close()  # close long
         else:  # bar["close"] < sme
@@ -176,7 +176,7 @@ class SMETrader:
     def _update_price_state(self, bar: pd.Series):
         if bar["close"] >= self._upper:
             self._previous_price_state = State.ABOVE_UPPER
-        elif bar["close"] >= self._sme:
+        elif bar["close"] >= self._sma:
             self._previous_price_state = State.ABOVE_SME
         elif bar["close"] >= self._lower:
             self._previous_price_state = State.BELOW_SME
@@ -184,8 +184,8 @@ class SMETrader:
             self._previous_price_state = State.BELOW_LOWER
 
     def _reset(self):
-        self._sme_buffer[:] = np.nan
-        self._sme = None
+        self._sma_buffer[:] = np.nan
+        self._sma = None
         self._upper = None
         self._lower = None
         self._bar_count = 0
@@ -196,7 +196,7 @@ class SMETrader:
             symbol: str,
             bar_size: timedelta,
             window: int,
-            sme_offset: float,
+            sma_offset: float,
             entry_n_shares: int,
             exit_start: Optional[time] = None,
             full_exit: Optional[time] = None,
@@ -220,3 +220,4 @@ class SMETrader:
                     "When trading intraday, must provide a value for the"
                     " exit_start and full_exit parameters."
                 )
+

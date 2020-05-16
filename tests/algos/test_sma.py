@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import pytest
 
-from algotradepy.algos.sme import SMETrader
+from algotradepy.algos.sma import SMATrader
 from algotradepy.brokers import SimulationBroker, SimulationClock
 from algotradepy.historical.loaders import HistoricalRetriever
 from algotradepy.time_utils import generate_trading_days
@@ -225,12 +225,12 @@ def get_sme_sim_broker_intra_single_day(data_dir):
         end_date=date(2020, 4, 6),
         simulation_time_step=timedelta(minutes=5),
     )
-    trader = SMETrader(
+    trader = SMATrader(
         broker=broker,
         symbol="TEST",
         bar_size=timedelta(minutes=5),
         window=10,
-        sme_offset=.1,
+        sma_offset=.1,
         entry_n_shares=1,
         exit_start=time(15, 50),
         full_exit=time(15, 55),
@@ -307,12 +307,12 @@ def get_sme_sim_broker_daily(data_dir):
         end_date=date(2020, 3, 31),
         simulation_time_step=timedelta(days=1),
     )
-    trader = SMETrader(
+    trader = SMATrader(
         broker=broker,
         symbol="TEST",
         bar_size=timedelta(days=1),
         window=10,
-        sme_offset=.1,
+        sma_offset=.1,
         entry_n_shares=1,
     )
     trader.start()

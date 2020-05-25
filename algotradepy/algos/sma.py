@@ -6,7 +6,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from algotradepy.brokers import ABroker
+from algotradepy.brokers.base import ABroker
 from algotradepy.historical.hist_utils import is_daily
 
 
@@ -24,6 +24,11 @@ class State(Enum):
 
 
 class SMATrader:
+    """
+    TODO: extract SMA, EMA in `indicators` package.
+    TODO: document
+    """
+
     def __init__(
             self,
             broker: ABroker,
@@ -74,7 +79,7 @@ class SMATrader:
 
     def start(self):
         if not self._started:
-            self._broker.register_for_bars(
+            self._broker.subscribe_for_bars(
                 symbol=self._symbol,
                 bar_size=self._bar_size,
                 func=self.step,

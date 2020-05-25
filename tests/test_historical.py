@@ -63,6 +63,8 @@ def test_retriever_cached_daily():
         cache_only=True,
     )
 
+    assert len(data) != 0
+
     validate_data_range(data=data, start_date=start_date, end_date=end_date)
 
 
@@ -112,7 +114,7 @@ def test_retrieve_non_cached_intraday(tmpdir, provider):
     )
 
     validate_data_range(data=data, start_date=start_date, end_date=end_date)
-    assert np.isclose(len(data), 5 * 6.5 * 60, atol=10)
+    assert np.isclose(len(data), 5 * 6.5 * 60, atol=15)
 
 
 @pytest.mark.parametrize(

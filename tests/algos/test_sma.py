@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from algotradepy.algos.sma import SMATrader
-from algotradepy.brokers import SimulationBroker, SimulationClock
+from algotradepy.brokers.sim_broker import SimulationBroker
 from algotradepy.historical.loaders import HistoricalRetriever
 from algotradepy.time_utils import generate_trading_days
 

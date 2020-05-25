@@ -1,58 +1,14 @@
-from abc import ABC, abstractmethod
 from datetime import timedelta, date, time, datetime
 import time as real_time
 from typing import Callable, Optional
 
 import pandas as pd
 
+from algotradepy.brokers.base import ABroker
 from algotradepy.historical.hist_utils import is_daily
 from algotradepy.historical.loaders import HistoricalRetriever
 from algotradepy.time_utils import generate_trading_schedule, \
     get_next_trading_date
-
-
-class ABroker(ABC):
-    def __init__(
-            self,
-            simulation: bool = True,
-    ):
-        self._simulation = simulation
-
-    @property
-    @abstractmethod
-    def acc_cash(self) -> float:
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def datetime(self) -> datetime:
-        raise NotImplementedError
-
-    @abstractmethod
-    def register_for_bars(
-            self,
-            symbol: str,
-            bar_size: timedelta,
-            func: Callable,
-            fn_kwargs: Optional[dict] = None,
-    ):
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_position(self, symbol: str) -> int:
-        raise NotImplementedError
-
-    @abstractmethod
-    def buy(self, symbol: str, n_shares: int) -> bool:
-        raise NotImplementedError
-
-    @abstractmethod
-    def sell(self, symbol: str, n_shares: int) -> bool:
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_transaction_fee(self) -> float:
-        raise NotImplementedError
 
 
 class SimulationEndException(Exception):
@@ -259,7 +215,7 @@ class SimulationBroker(ABroker):
             except SimulationEndException:
                 break
 
-    def register_for_bars(
+    def subscribe_for_bars(
             self,
             symbol: str,
             bar_size: timedelta,

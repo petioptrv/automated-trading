@@ -18,6 +18,9 @@ from algotradepy.time_utils import generate_trading_days
 
 
 class HistCacheHandler:
+    """
+    TODO: documentation
+    """
     def __init__(self, hist_data_dir: Path = HIST_DATA_DIR):
         self._hist_data_dir = hist_data_dir
 

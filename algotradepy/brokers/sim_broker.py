@@ -197,7 +197,7 @@ class SimulationBroker(ABroker):
     def datetime(self) -> datetime:
         return self._clock.datetime
 
-    def get_position(self, symbol: str) -> int:
+    def get_position(self, symbol: str, *args, **kwargs) -> int:
         symbol = symbol.upper()
         position = self._positions.setdefault(symbol, 0)
         return position
@@ -215,7 +215,7 @@ class SimulationBroker(ABroker):
             except SimulationEndException:
                 break
 
-    def subscribe_for_bars(
+    def subscribe_to_bars(
             self,
             symbol: str,
             bar_size: timedelta,

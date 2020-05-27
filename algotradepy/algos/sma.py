@@ -79,7 +79,7 @@ class SMATrader:
 
     def start(self):
         if not self._started:
-            self._broker.subscribe_for_bars(
+            self._broker.subscribe_to_bars(
                 symbol=self._symbol,
                 bar_size=self._bar_size,
                 func=self.step,

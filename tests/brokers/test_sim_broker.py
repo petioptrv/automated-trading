@@ -246,7 +246,7 @@ def test_simulation_broker_register_same_bar_size(sim_broker_15m):
         end_date=date(2020, 4, 7),
         bar_size=timedelta(minutes=15),
     )
-    sim_broker_15m.subscribe_for_bars(
+    sim_broker_15m.subscribe_to_bars(
         symbol="SPY",
         bar_size=timedelta(minutes=15),
         func=checker.step,
@@ -261,7 +261,7 @@ def test_simulation_broker_register_diff_bar_size(sim_broker_15m):
         end_date=date(2020, 4, 7),
         bar_size=timedelta(minutes=30),
     )
-    sim_broker_15m.subscribe_for_bars(
+    sim_broker_15m.subscribe_to_bars(
         symbol="SPY",
         bar_size=timedelta(minutes=30),
         func=checker.step,
@@ -276,7 +276,7 @@ def test_simulation_broker_register_daily(sim_broker_15m):
         end_date=date(2020, 4, 7),
         bar_size=timedelta(days=1),
     )
-    sim_broker_15m.subscribe_for_bars(
+    sim_broker_15m.subscribe_to_bars(
         symbol="SPY",
         bar_size=timedelta(days=1),
         func=checker.step,

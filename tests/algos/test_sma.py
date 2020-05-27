@@ -351,5 +351,6 @@ def test_cases_daily(tmpdir, case, expected_acc_cash, expected_pos):
     assert broker.get_position("TEST") == expected_pos
 
 
+@pytest.mark.skip("Not implemented.")
 def test_closing_intraday_positions_at_eod():
     raise NotImplementedError

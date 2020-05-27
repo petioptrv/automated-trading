@@ -1,10 +1,15 @@
 from datetime import datetime, timedelta
-from typing import Optional, Callable, Any
-from threading import Thread
+from typing import Optional, Callable, Any, Tuple, Dict
+from threading import Lock
 from queue import Queue
 
+from ibapi.contract import Contract
+
 from algotradepy.brokers.base import ABroker
-from algotradepy.connectors.ib_connector import IBConnector
+from algotradepy.connectors.ib_connector import (
+    IBConnector,
+    build_and_start_connector, MASTER_CLIENT_ID,
+)
 
 from ibapi.account_summary_tags import AccountSummaryTags
 
@@ -38,53 +43,47 @@ class IBBroker(ABroker):
                 trading_mode = "paper"
             else:
                 trading_mode = "live"
-            self._ib_conn = IBConnector(trading_mode=trading_mode)
+            self._ib_conn = build_and_start_connector(trading_mode=trading_mode)
         else:
             self._ib_conn = ib_connector
-        connector_thread = Thread(target=self._ib_conn.run)
-        connector_thread.start()
-        self._req_id = None
+        self._req_id: Optional[int] = None
+        self._positions: Optional[Dict] = None
+        self._positions_lock = Lock()
 
     def __del__(self):
-        self._ib_conn.stop()
+        if self._positions is not None:
+            self._ib_conn.cancelPositions()
+        self._ib_conn.managed_disconnect()
 
     @property
     def acc_cash(self) -> float:
-        req_id = self._get_next_req_id()
-        acc_summary_results_queue = self._get_results_queue(
+        args, kwargs = self._make_accumulation_request(
+            ib_request_fn=self._ib_conn.reqAccountSummary,
+            request_kwargs={
+                "groupName": "All",
+                "tags": AccountSummaryTags.TotalCashValue
+            },
             ib_receiver_fn=self._ib_conn.accountSummary,
-            req_id=req_id,
-        )
-        acc_summary_end_queue = self._get_results_queue(
-            ib_receiver_fn=self._ib_conn.accountSummaryEnd,
-            req_id=req_id,
-        )
-        self._ib_conn.reqAccountSummary(
-            reqId=req_id,
-            groupName="All",
-            tags=AccountSummaryTags.TotalCashValue,
-        )
-        self._await_results_from_queue(queue=acc_summary_end_queue)
-        args, kwargs = self._await_results_from_queue(
-            queue=acc_summary_results_queue,
+            ib_end_fn=self._ib_conn.accountSummaryEnd,
+            ib_cancel_fn=self._ib_conn.cancelAccountSummary,
         )
         acc_summary = args
-        self._ib_conn.cancelAccountSummary(reqId=req_id)
         acc_value = float(acc_summary[3])
+
         return acc_value
 
     @property
     def datetime(self) -> datetime:
-        server_time_queue = self._get_results_queue(
+        args, kwargs = self._make_one_shot_request(
+            ib_request_fn=self._ib_conn.reqCurrentTime,
             ib_receiver_fn=self._ib_conn.currentTime,
         )
-        self._ib_conn.reqCurrentTime()
-        args, kwargs = self._await_results_from_queue(queue=server_time_queue)
         server_time = args[0]
         dt = datetime.fromtimestamp(server_time)
+
         return dt
 
-    def subscribe_for_bars(
+    def subscribe_to_bars(
             self,
             symbol: str,
             bar_size: timedelta,
@@ -93,8 +92,34 @@ class IBBroker(ABroker):
     ):
         raise NotImplementedError
 
-    def get_position(self, symbol: str) -> int:
-        pass
+    def get_position(
+            self,
+            symbol: str,
+            *args,
+            account: Optional[str] = None,
+            **kwargs
+    ) -> int:
+        if self._ib_conn.client_id != MASTER_CLIENT_ID:
+            raise AttributeError(
+                f"This client ID cannot request positions. Please use a broker"
+                f" instantiated with the master client ID ({MASTER_CLIENT_ID})"
+                f" to request positions."
+            )
+
+        pos = 0
+
+        if self._positions is None:
+            self._subscribe_to_positions()
+
+        symbol_dict: Optional[Dict] = self._positions.get(symbol)
+        if symbol_dict is not None:
+            if account is None:
+                for acc, acc_dict in symbol_dict.items():
+                    pos += acc_dict["position"]
+            else:
+                pos += symbol_dict[account]["position"]
+
+        return pos
 
     def buy(self, symbol: str, n_shares: int, **kwargs) -> bool:
         pass
@@ -107,10 +132,10 @@ class IBBroker(ABroker):
 
     # ------------ todo: add to ABroker -----------------
 
-    def subscribe_to_new_positions(
+    def subscribe_to_new_orders(
             self,
             func: Callable,
-            fn_kwargs: Optional[dict] = None,
+            fn_kwargs: Optional[Dict] = None,
     ):
         if fn_kwargs is None:
             fn_kwargs = {}
@@ -122,6 +147,53 @@ class IBBroker(ABroker):
         )
         self._ib_conn.reqAutoOpenOrders(bAutoBind=True)
 
+    # ---------- Requests Helpers ----------------------
+
+    def _make_accumulation_request(
+            self,
+            ib_request_fn: Callable,
+            ib_receiver_fn: Callable,
+            ib_end_fn: Callable,
+            ib_cancel_fn: Callable,
+            request_kwargs: Optional[Dict] = None,
+    ) -> Tuple[Tuple, Dict]:
+        if request_kwargs is None:
+            request_kwargs = {}
+        req_id = self._get_next_req_id()
+        results_queue = self._get_callback_queue(
+            ib_receiver_fn=ib_receiver_fn,
+            req_id=req_id,
+        )
+        end_queue = self._get_callback_queue(
+            ib_receiver_fn=ib_end_fn,
+            req_id=req_id,
+        )
+        request_kwargs["reqId"] = req_id
+
+        ib_request_fn(**request_kwargs)
+        self._await_results_from_queue(queue=end_queue)
+        args, kwargs = self._await_results_from_queue(queue=results_queue)
+        ib_cancel_fn(req_id)
+
+        return args, kwargs
+
+    def _make_one_shot_request(
+            self,
+            ib_request_fn: Callable,
+            ib_receiver_fn: Callable,
+            request_kwargs: Optional[Dict] = None,
+    ) -> Tuple[Tuple, Dict]:
+        if request_kwargs is None:
+            request_kwargs = {}
+        results_queue = self._get_callback_queue(
+            ib_receiver_fn=ib_receiver_fn,
+        )
+
+        ib_request_fn(**request_kwargs)
+        args, kwargs = self._await_results_from_queue(queue=results_queue)
+
+        return args, kwargs
+
     def _get_next_req_id(self) -> int:
         if self._req_id is None:
             self._get_req_id_from_ib()
@@ -130,14 +202,14 @@ class IBBroker(ABroker):
         return self._req_id
 
     def _get_req_id_from_ib(self):
-        queue = self._get_results_queue(
+        queue = self._get_callback_queue(
             ib_receiver_fn=self._ib_conn.nextValidId,
         )
         self._ib_conn.reqIds(numIds=1)
         args, kwargs = self._await_results_from_queue(queue=queue)
         self._req_id = args[0]
 
-    def _get_results_queue(
+    def _get_callback_queue(
             self,
             ib_receiver_fn: Callable,
             req_id: Optional[int] = None,
@@ -151,11 +223,12 @@ class IBBroker(ABroker):
                 "req_id": req_id
             },
         )
+
         return receiver_queue
 
     @staticmethod
     def _update_queue(*args, queue: Queue, req_id: Optional[int], **kwargs):
-        if req_id is None or args[0] == req_id:
+        if req_id is None or (len(args) != 0 and args[0] == req_id):
             queue.put((args, kwargs))
 
     @staticmethod
@@ -163,5 +236,41 @@ class IBBroker(ABroker):
         while queue.empty():
             pass
         res = queue.get()
+
         return res
+
+    def _subscribe_to_positions(self):
+        request_positions = False
+
+        with self._positions_lock:
+            if self._positions is None:
+                self._positions = {}
+                request_positions = True
+
+        if request_positions:
+            self._ib_conn.subscribe(
+                target_fn=self._ib_conn.position,
+                callback=self._update_position
+            )
+            end_queue = self._get_callback_queue(
+                ib_receiver_fn=self._ib_conn.positionEnd,
+                # req_id=-1,  # just to have something returned in the queue
+            )
+            self._ib_conn.reqPositions()
+            self._await_results_from_queue(queue=end_queue)
+
+    def _update_position(
+            self,
+            account: str,
+            contract: Contract,
+            position: float,
+            avgCost: float,
+    ):
+        symbol = contract.symbol
+        print(f"Updating positions {account} {contract.symbol}")
+        with self._positions_lock:
+            symbol_pos = self._positions.setdefault(symbol, {})
+            symbol_pos_acc = symbol_pos.setdefault(account, {})
+            symbol_pos_acc["position"] = position
+            symbol_pos_acc["ave_cost"] = avgCost
 

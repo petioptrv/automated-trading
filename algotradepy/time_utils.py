@@ -13,8 +13,7 @@ def generate_trading_days(start_date: date, end_date: date) -> List[date]:
 
 
 def generate_trading_schedule(
-        start_date: date,
-        end_date: date,
+    start_date: date, end_date: date,
 ) -> pd.DataFrame:
     nyse = pmc.get_calendar("NYSE")
     schedule = nyse.schedule(start_date=start_date, end_date=end_date)
@@ -31,17 +30,13 @@ def generate_trading_schedule(
 def get_next_trading_date(base_date: date) -> date:
     end_date = base_date + timedelta(days=5)
     schedule = generate_trading_schedule(
-        start_date=base_date,
-        end_date=end_date,
+        start_date=base_date, end_date=end_date,
     )
     target_date = schedule.iloc[1].name
     return target_date
 
 
-def time_arithmetic(
-        start_time: time,
-        delta: timedelta,
-) -> time:
+def time_arithmetic(start_time: time, delta: timedelta,) -> time:
     dt = datetime.combine(date.today(), start_time)
     res_dt = dt + delta
 

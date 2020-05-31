@@ -12,7 +12,8 @@ from algotradepy.historical.hist_utils import (
     is_daily,
     DATETIME_FORMAT,
     DATE_FORMAT,
-    HIST_DATA_DIR)
+    HIST_DATA_DIR,
+)
 from algotradepy.historical.providers import AProvider
 from algotradepy.time_utils import generate_trading_days
 
@@ -21,6 +22,7 @@ class HistCacheHandler:
     """
     TODO: documentation
     """
+
     def __init__(self, hist_data_dir: Path = HIST_DATA_DIR):
         self._hist_data_dir = hist_data_dir
 
@@ -33,18 +35,16 @@ class HistCacheHandler:
         raise NotImplementedError
 
     def get_cached_data(
-            self,
-            symbol: str,
-            start_date: date,
-            end_date: date,
-            bar_size: timedelta,
+        self,
+        symbol: str,
+        start_date: date,
+        end_date: date,
+        bar_size: timedelta,
     ):
         bar_size_str = bar_size_to_str(bar_size=bar_size)
         path = self.base_data_path / symbol.upper() / bar_size_str
         f_names = hist_file_names(
-            start_date=start_date,
-            end_date=end_date,
-            bar_size=bar_size
+            start_date=start_date, end_date=end_date, bar_size=bar_size
         )
 
         data = pd.DataFrame()
@@ -53,29 +53,24 @@ class HistCacheHandler:
             f_path = path / f_name
             if os.path.exists(f_path):
                 day_data = pd.read_csv(
-                    f_path,
-                    index_col="datetime",
-                    parse_dates=True,
+                    f_path, index_col="datetime", parse_dates=True,
                 )
                 data = data.append(day_data)
 
         if len(data) != 0:
             if is_daily(bar_size=bar_size):
-                data = data.loc[start_date: end_date]
+                data = data.loc[start_date:end_date]
 
         return data
 
     def cache_data(
-            self,
-            data: pd.DataFrame,
-            symbol: str,
-            bar_size: timedelta,
+        self, data: pd.DataFrame, symbol: str, bar_size: timedelta,
     ):
         if len(data) != 0:
             folder_path = (
-                    self.base_data_path
-                    / symbol.upper()
-                    / bar_size_to_str(bar_size=bar_size)
+                self.base_data_path
+                / symbol.upper()
+                / bar_size_to_str(bar_size=bar_size)
             )
             if not os.path.exists(path=folder_path):
                 os.makedirs(name=folder_path)
@@ -84,9 +79,7 @@ class HistCacheHandler:
                 file_path = folder_path / "daily.csv"
                 if os.path.exists(file_path):
                     day_data = pd.read_csv(
-                        file_path,
-                        index_col="datetime",
-                        parse_dates=True,
+                        file_path, index_col="datetime", parse_dates=True,
                     )
                     data = data.append(day_data).sort_index()
                 data.to_csv(file_path, date_format=DATE_FORMAT)
@@ -116,20 +109,20 @@ class HistoricalRetriever:
     """
 
     def __init__(
-            self,
-            provider: Optional[AProvider] = None,
-            hist_data_dir: Path = HIST_DATA_DIR,
+        self,
+        provider: Optional[AProvider] = None,
+        hist_data_dir: Path = HIST_DATA_DIR,
     ):
         self._cache_handler = HistCacheHandler(hist_data_dir=hist_data_dir)
         self._provider = provider
 
     def retrieve_bar_data(
-            self,
-            symbol: str,
-            bar_size: timedelta,
-            start_date: Optional[date],
-            end_date: Optional[date],
-            cache_only: bool = False,
+        self,
+        symbol: str,
+        bar_size: timedelta,
+        start_date: Optional[date],
+        end_date: Optional[date],
+        cache_only: bool = False,
     ) -> pd.DataFrame:
         """Retrieves the historical data.
 
@@ -165,9 +158,7 @@ class HistoricalRetriever:
 
         if not cache_only:
             date_ranges = self._get_missing_date_ranges(
-                data=data,
-                start_date=start_date,
-                end_date=end_date,
+                data=data, start_date=start_date, end_date=end_date,
             )
 
             for date_range in date_ranges:
@@ -180,18 +171,14 @@ class HistoricalRetriever:
                 data = data.append(range_data)
 
                 self._cache_handler.cache_data(
-                    data=range_data,
-                    symbol=symbol,
-                    bar_size=bar_size,
+                    data=range_data, symbol=symbol, bar_size=bar_size,
                 )
 
         return data
 
     @staticmethod
     def _get_missing_date_ranges(
-            data: pd.DataFrame,
-            start_date: date,
-            end_date: date,
+        data: pd.DataFrame, start_date: date, end_date: date,
     ) -> List[List[date]]:
         dates = generate_trading_days(start_date=start_date, end_date=end_date)
 
@@ -209,7 +196,7 @@ class HistoricalRetriever:
                         date_ranges.append(date_range)
                     if len(data_dates) == 0:
                         if i != len(dates) - 1:
-                            date_ranges.append(dates[i+1:])
+                            date_ranges.append(dates[i + 1 :])
                         break
                     date_range = []
         else:
@@ -218,11 +205,11 @@ class HistoricalRetriever:
         return date_ranges
 
     def _download_data(
-            self,
-            symbol: str,
-            start_date: date,
-            end_date: date,
-            bar_size: timedelta,
+        self,
+        symbol: str,
+        start_date: date,
+        end_date: date,
+        bar_size: timedelta,
     ):
         data = self._provider.download_data(
             symbol=symbol,

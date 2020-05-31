@@ -12,12 +12,12 @@ class HistoricalAggregator:
         self._cache_handler = HistCacheHandler(hist_data_dir=hist_data_dir)
 
     def aggregate_data(
-            self,
-            symbol: str,
-            start_date: date,
-            end_date: date,
-            base_bar_size: timedelta,
-            target_bar_size: timedelta,
+        self,
+        symbol: str,
+        start_date: date,
+        end_date: date,
+        base_bar_size: timedelta,
+        target_bar_size: timedelta,
     ):
         if target_bar_size < base_bar_size:
             raise ValueError(
@@ -29,15 +29,12 @@ class HistoricalAggregator:
             symbol=symbol,
             start_date=start_date,
             end_date=end_date,
-            bar_size=base_bar_size
+            bar_size=base_bar_size,
         )
 
         bars_freq = self._get_bars_freq(bar_size=target_bar_size)
         bar_groups = data.groupby(
-            [
-                pd.Grouper(freq="D"),
-                pd.Grouper(freq=bars_freq),
-            ]
+            [pd.Grouper(freq="D"), pd.Grouper(freq=bars_freq)]
         )
         data = bar_groups.agg(
             open=pd.NamedAgg(column="open", aggfunc="first"),
@@ -49,8 +46,7 @@ class HistoricalAggregator:
         data.index = data.index.droplevel(0)
 
         self._cache_handler.cache_data(
-            data=data, symbol=symbol,
-            bar_size=target_bar_size,
+            data=data, symbol=symbol, bar_size=target_bar_size,
         )
 
         return data

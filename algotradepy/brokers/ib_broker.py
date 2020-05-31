@@ -8,7 +8,8 @@ from ibapi.contract import Contract
 from algotradepy.brokers.base import ABroker
 from algotradepy.connectors.ib_connector import (
     IBConnector,
-    build_and_start_connector, MASTER_CLIENT_ID,
+    build_and_start_connector,
+    MASTER_CLIENT_ID,
 )
 
 from ibapi.account_summary_tags import AccountSummaryTags
@@ -33,9 +34,9 @@ class IBBroker(ABroker):
     """
 
     def __init__(
-            self,
-            simulation: bool = True,
-            ib_connector: Optional[IBConnector] = None,
+        self,
+        simulation: bool = True,
+        ib_connector: Optional[IBConnector] = None,
     ):
         super().__init__(simulation=simulation)
         if ib_connector is None:
@@ -43,7 +44,9 @@ class IBBroker(ABroker):
                 trading_mode = "paper"
             else:
                 trading_mode = "live"
-            self._ib_conn = build_and_start_connector(trading_mode=trading_mode)
+            self._ib_conn = build_and_start_connector(
+                trading_mode=trading_mode
+            )
         else:
             self._ib_conn = ib_connector
         self._req_id: Optional[int] = None
@@ -61,7 +64,7 @@ class IBBroker(ABroker):
             ib_request_fn=self._ib_conn.reqAccountSummary,
             request_kwargs={
                 "groupName": "All",
-                "tags": AccountSummaryTags.TotalCashValue
+                "tags": AccountSummaryTags.TotalCashValue,
             },
             ib_receiver_fn=self._ib_conn.accountSummary,
             ib_end_fn=self._ib_conn.accountSummaryEnd,
@@ -84,20 +87,16 @@ class IBBroker(ABroker):
         return dt
 
     def subscribe_to_bars(
-            self,
-            symbol: str,
-            bar_size: timedelta,
-            func: Callable,
-            fn_kwargs: Optional[dict] = None,
+        self,
+        symbol: str,
+        bar_size: timedelta,
+        func: Callable,
+        fn_kwargs: Optional[dict] = None,
     ):
         raise NotImplementedError
 
     def get_position(
-            self,
-            symbol: str,
-            *args,
-            account: Optional[str] = None,
-            **kwargs
+        self, symbol: str, *args, account: Optional[str] = None, **kwargs
     ) -> int:
         if self._ib_conn.client_id != MASTER_CLIENT_ID:
             raise AttributeError(
@@ -133,9 +132,7 @@ class IBBroker(ABroker):
     # ------------ todo: add to ABroker -----------------
 
     def subscribe_to_new_orders(
-            self,
-            func: Callable,
-            fn_kwargs: Optional[Dict] = None,
+        self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
         if fn_kwargs is None:
             fn_kwargs = {}
@@ -150,23 +147,21 @@ class IBBroker(ABroker):
     # ---------- Requests Helpers ----------------------
 
     def _make_accumulation_request(
-            self,
-            ib_request_fn: Callable,
-            ib_receiver_fn: Callable,
-            ib_end_fn: Callable,
-            ib_cancel_fn: Callable,
-            request_kwargs: Optional[Dict] = None,
+        self,
+        ib_request_fn: Callable,
+        ib_receiver_fn: Callable,
+        ib_end_fn: Callable,
+        ib_cancel_fn: Callable,
+        request_kwargs: Optional[Dict] = None,
     ) -> Tuple[Tuple, Dict]:
         if request_kwargs is None:
             request_kwargs = {}
         req_id = self._get_next_req_id()
         results_queue = self._get_callback_queue(
-            ib_receiver_fn=ib_receiver_fn,
-            req_id=req_id,
+            ib_receiver_fn=ib_receiver_fn, req_id=req_id,
         )
         end_queue = self._get_callback_queue(
-            ib_receiver_fn=ib_end_fn,
-            req_id=req_id,
+            ib_receiver_fn=ib_end_fn, req_id=req_id,
         )
         request_kwargs["reqId"] = req_id
 
@@ -178,10 +173,10 @@ class IBBroker(ABroker):
         return args, kwargs
 
     def _make_one_shot_request(
-            self,
-            ib_request_fn: Callable,
-            ib_receiver_fn: Callable,
-            request_kwargs: Optional[Dict] = None,
+        self,
+        ib_request_fn: Callable,
+        ib_receiver_fn: Callable,
+        request_kwargs: Optional[Dict] = None,
     ) -> Tuple[Tuple, Dict]:
         if request_kwargs is None:
             request_kwargs = {}
@@ -210,18 +205,13 @@ class IBBroker(ABroker):
         self._req_id = args[0]
 
     def _get_callback_queue(
-            self,
-            ib_receiver_fn: Callable,
-            req_id: Optional[int] = None,
+        self, ib_receiver_fn: Callable, req_id: Optional[int] = None,
     ):
         receiver_queue = Queue()
         self._ib_conn.subscribe(
             target_fn=ib_receiver_fn,
             callback=self._update_queue,
-            callback_kwargs={
-                "queue": receiver_queue,
-                "req_id": req_id
-            },
+            callback_kwargs={"queue": receiver_queue, "req_id": req_id},
         )
 
         return receiver_queue
@@ -250,7 +240,7 @@ class IBBroker(ABroker):
         if request_positions:
             self._ib_conn.subscribe(
                 target_fn=self._ib_conn.position,
-                callback=self._update_position
+                callback=self._update_position,
             )
             end_queue = self._get_callback_queue(
                 ib_receiver_fn=self._ib_conn.positionEnd,
@@ -260,11 +250,11 @@ class IBBroker(ABroker):
             self._await_results_from_queue(queue=end_queue)
 
     def _update_position(
-            self,
-            account: str,
-            contract: Contract,
-            position: float,
-            avgCost: float,
+        self,
+        account: str,
+        contract: Contract,
+        position: float,
+        avgCost: float,
     ):
         symbol = contract.symbol
         print(f"Updating positions {account} {contract.symbol}")
@@ -273,4 +263,3 @@ class IBBroker(ABroker):
             symbol_pos_acc = symbol_pos.setdefault(account, {})
             symbol_pos_acc["position"] = position
             symbol_pos_acc["ave_cost"] = avgCost
-

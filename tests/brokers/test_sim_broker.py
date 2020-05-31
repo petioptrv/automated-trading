@@ -58,7 +58,7 @@ def test_simulation_clock_real_time():
 
     t2 = real_time.time()
 
-    assert np.isclose(t2 - t1, 2, atol=.1)
+    assert np.isclose(t2 - t1, 2, atol=0.1)
 
 
 def test_simulation_clock_multi_day():
@@ -191,10 +191,7 @@ def test_simulation_broker_buy(sim_broker_15m):
 
     spy_2020_4_6_9_45_open = 257.78
 
-    assert np.isclose(
-        broker.acc_cash,
-        1000 - spy_2020_4_6_9_45_open - 1,
-    )
+    assert np.isclose(broker.acc_cash, 1000 - spy_2020_4_6_9_45_open - 1,)
     assert broker.get_position("SPY") == 1
 
 
@@ -209,19 +206,12 @@ def test_simulation_broker_sell(sim_broker_15m):
     spy_2020_4_6_9_30_close = 257.77
 
     assert np.isclose(
-        broker.acc_cash,
-        1000 + spy_2020_4_6_9_30_close - 1,
-        .01,
+        broker.acc_cash, 1000 + spy_2020_4_6_9_30_close - 1, 0.01,
     )
 
 
 class BarChecker:
-    def __init__(
-            self,
-            start_date: date,
-            end_date: date,
-            bar_size: timedelta
-    ):
+    def __init__(self, start_date: date, end_date: date, bar_size: timedelta):
         hist_retriever = HistoricalRetriever(hist_data_dir=TEST_DATA_DIR)
         self._sim_data = hist_retriever.retrieve_bar_data(
             symbol="SPY",
@@ -247,9 +237,7 @@ def test_simulation_broker_register_same_bar_size(sim_broker_15m):
         bar_size=timedelta(minutes=15),
     )
     sim_broker_15m.subscribe_to_bars(
-        symbol="SPY",
-        bar_size=timedelta(minutes=15),
-        func=checker.step,
+        symbol="SPY", bar_size=timedelta(minutes=15), func=checker.step,
     )
     sim_broker_15m.run_sim()
     checker.assert_all_received()
@@ -262,9 +250,7 @@ def test_simulation_broker_register_diff_bar_size(sim_broker_15m):
         bar_size=timedelta(minutes=30),
     )
     sim_broker_15m.subscribe_to_bars(
-        symbol="SPY",
-        bar_size=timedelta(minutes=30),
-        func=checker.step,
+        symbol="SPY", bar_size=timedelta(minutes=30), func=checker.step,
     )
     sim_broker_15m.run_sim()
     checker.assert_all_received()
@@ -277,9 +263,7 @@ def test_simulation_broker_register_daily(sim_broker_15m):
         bar_size=timedelta(days=1),
     )
     sim_broker_15m.subscribe_to_bars(
-        symbol="SPY",
-        bar_size=timedelta(days=1),
-        func=checker.step,
+        symbol="SPY", bar_size=timedelta(days=1), func=checker.step,
     )
     sim_broker_15m.run_sim()
     checker.assert_all_received()

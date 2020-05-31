@@ -18,10 +18,16 @@ def apply_case(data: pd.DataFrame, case: int):
     if case == 0:
         data.iloc[11].loc[["high", "close"]] = [111, 111]
         data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            111, 111, 113, 113
+            111,
+            111,
+            113,
+            113,
         ]
         data.iloc[13].loc[["open", "high", "low", "close"]] = [
-            111, 111, 95, 95
+            111,
+            111,
+            95,
+            95,
         ]
         data.iloc[14].loc[["open", "low"]] = [95, 95]  # for completeness
 
@@ -30,10 +36,16 @@ def apply_case(data: pd.DataFrame, case: int):
     if case == 1:
         data.iloc[11].loc[["high", "close"]] = [111, 111]
         data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            111, 111, 102, 102
+            111,
+            111,
+            102,
+            102,
         ]
         data.iloc[13].loc[["open", "high", "low", "close"]] = [
-            102, 102, 95, 95
+            102,
+            102,
+            95,
+            95,
         ]
         data.iloc[14].loc[["open", "low"]] = [95, 95]  # for completeness
 
@@ -42,7 +54,10 @@ def apply_case(data: pd.DataFrame, case: int):
     elif case == 2:
         data.iloc[11].loc[["high", "close"]] = [111, 111]
         data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            111, 111, 95, 95
+            111,
+            111,
+            95,
+            95,
         ]
         data.iloc[13].loc[["open", "low"]] = [95, 95]  # for completeness
 
@@ -51,10 +66,16 @@ def apply_case(data: pd.DataFrame, case: int):
     elif case == 3:
         data.iloc[11].loc[["high", "close"]] = [111, 111]
         data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            111, 111, 90, 90
+            111,
+            111,
+            90,
+            90,
         ]
         data.iloc[13].loc[["open", "high", "low", "close"]] = [
-            90, 105, 90, 105
+            90,
+            105,
+            90,
+            105,
         ]
         data.iloc[14].loc[["open", "high"]] = [105, 105]  # for completeness
 
@@ -63,10 +84,16 @@ def apply_case(data: pd.DataFrame, case: int):
     elif case == 4:
         data.iloc[11].loc[["high", "close"]] = [101, 101]
         data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            101, 111, 101, 111
+            101,
+            111,
+            101,
+            111,
         ]
         data.iloc[13].loc[["open", "high", "low", "close"]] = [
-            111, 111, 95, 95
+            111,
+            111,
+            95,
+            95,
         ]
         data.iloc[14].loc[["open", "low"]] = [95, 95]  # for completeness
 
@@ -75,7 +102,10 @@ def apply_case(data: pd.DataFrame, case: int):
     elif case == 5:
         data.iloc[11].loc[["high", "close"]] = [101, 101]
         data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            101, 102, 101, 102
+            101,
+            102,
+            101,
+            102,
         ]
         data.iloc[13].loc[["open", "high"]] = [102, 102]  # for completeness
 
@@ -84,7 +114,10 @@ def apply_case(data: pd.DataFrame, case: int):
     elif case == 6:
         data.iloc[11].loc[["high", "close"]] = [101, 101]
         data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            101, 101, 99, 99
+            101,
+            101,
+            99,
+            99,
         ]
         data.iloc[13].loc[["open", "low"]] = [99, 99]  # for completeness
 
@@ -93,10 +126,16 @@ def apply_case(data: pd.DataFrame, case: int):
     elif case == 7:
         data.iloc[11].loc[["high", "close"]] = [101, 101]
         data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            101, 101, 89, 89
+            101,
+            101,
+            89,
+            89,
         ]
         data.iloc[13].loc[["open", "high", "low", "close"]] = [
-            89, 105, 89, 105
+            89,
+            105,
+            89,
+            105,
         ]
         data.iloc[14].loc[["open", "high"]] = [105, 105]  # for completeness
 
@@ -105,10 +144,16 @@ def apply_case(data: pd.DataFrame, case: int):
     elif case == 8:
         data.iloc[11].loc[["low", "close"]] = [99, 99]
         data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            99, 111, 99, 111
+            99,
+            111,
+            99,
+            111,
         ]
         data.iloc[13].loc[["open", "high", "low", "close"]] = [
-            111, 111, 95, 95
+            111,
+            111,
+            95,
+            95,
         ]
         data.iloc[14].loc[["open", "low"]] = [95, 95]  # for completeness
 
@@ -117,7 +162,10 @@ def apply_case(data: pd.DataFrame, case: int):
     elif case == 9:
         data.iloc[11].loc[["low", "close"]] = [99, 99]
         data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            99, 101, 99, 101
+            99,
+            101,
+            99,
+            101,
         ]
         data.iloc[13].loc[["open", "high"]] = [101, 101]  # for completeness
 
@@ -125,20 +173,19 @@ def apply_case(data: pd.DataFrame, case: int):
     # sme -> below sme -> below sme
     elif case == 10:
         data.iloc[11].loc[["low", "close"]] = [99, 99]
-        data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            99, 99, 98, 98
-        ]
+        data.iloc[12].loc[["open", "high", "low", "close"]] = [99, 99, 98, 98]
         data.iloc[13].loc[["open", "low"]] = [98, 98]  # for completeness
 
     # Case: Below sme to below lower
     # sme -> below sme -> below lower -> above sme
     elif case == 11:
         data.iloc[11].loc[["low", "close"]] = [99, 99]
-        data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            99, 99, 88, 88
-        ]
+        data.iloc[12].loc[["open", "high", "low", "close"]] = [99, 99, 88, 88]
         data.iloc[13].loc[["open", "high", "low", "close"]] = [
-            88, 105, 88, 105
+            88,
+            105,
+            88,
+            105,
         ]
         data.iloc[14].loc[["open", "high"]] = [105, 105]  # for completeness
 
@@ -147,10 +194,16 @@ def apply_case(data: pd.DataFrame, case: int):
     elif case == 12:
         data.iloc[11].loc[["low", "close"]] = [89, 89]
         data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            89, 111, 89, 111
+            89,
+            111,
+            89,
+            111,
         ]
         data.iloc[13].loc[["open", "high", "low", "close"]] = [
-            111, 111, 95, 95
+            111,
+            111,
+            95,
+            95,
         ]
         data.iloc[14].loc[["open", "low"]] = [95, 95]  # for completeness
 
@@ -159,7 +212,10 @@ def apply_case(data: pd.DataFrame, case: int):
     elif case == 13:
         data.iloc[11].loc[["low", "close"]] = [89, 89]
         data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            89, 105, 89, 105
+            89,
+            105,
+            89,
+            105,
         ]
         data.iloc[13].loc[["open", "high"]] = [105, 105]  # for completeness
 
@@ -167,11 +223,12 @@ def apply_case(data: pd.DataFrame, case: int):
     # sme -> below lower -> below sme -> above sme
     elif case == 14:
         data.iloc[11].loc[["low", "close"]] = [89, 89]
-        data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            89, 95, 89, 95
-        ]
+        data.iloc[12].loc[["open", "high", "low", "close"]] = [89, 95, 89, 95]
         data.iloc[13].loc[["open", "high", "low", "close"]] = [
-            95, 105, 95, 105
+            95,
+            105,
+            95,
+            105,
         ]
         data.iloc[14].loc[["open", "high"]] = [105, 105]  # for completeness
 
@@ -179,11 +236,12 @@ def apply_case(data: pd.DataFrame, case: int):
     # sme -> below lower -> below lower -> above sme
     elif case == 15:
         data.iloc[11].loc[["low", "close"]] = [89, 89]
-        data.iloc[12].loc[["open", "high", "low", "close"]] = [
-            89, 89, 88, 88
-        ]
+        data.iloc[12].loc[["open", "high", "low", "close"]] = [89, 89, 88, 88]
         data.iloc[13].loc[["open", "high", "low", "close"]] = [
-            88, 105, 88, 105
+            88,
+            105,
+            88,
+            105,
         ]
         data.iloc[14].loc[["open", "high"]] = [105, 105]  # for completeness
 
@@ -207,7 +265,7 @@ def prepare_dataset_intra_single_day(data_dir: Path, case: int):
             "close": np.full(len(index), 100),
             "volume": np.full(len(index), 1000),
         },
-        index=index
+        index=index,
     )
 
     apply_case(data=data, case=case)
@@ -230,7 +288,7 @@ def get_sme_sim_broker_intra_single_day(data_dir):
         symbol="TEST",
         bar_size=timedelta(minutes=5),
         window=10,
-        sma_offset=.1,
+        sma_offset=0.1,
         entry_n_shares=1,
         exit_start=time(15, 50),
         full_exit=time(15, 55),
@@ -258,7 +316,7 @@ def get_sme_sim_broker_intra_single_day(data_dir):
         (13, 10_014, 0),
         (14, 10_014, 0),
         (15, 10_014, 0),
-    ]
+    ],
 )
 def test_cases_intra_single_day(tmpdir, case, expected_acc_cash, expected_pos):
     data_dir = Path(tmpdir)
@@ -277,8 +335,7 @@ def prepare_dataset_daily(data_dir: Path, case: int):
     f_path = f_dir / "daily.csv"
 
     dates = generate_trading_days(
-        start_date=datetime(2020, 2, 1),
-        end_date=datetime(2020, 3, 31),
+        start_date=datetime(2020, 2, 1), end_date=datetime(2020, 3, 31),
     )
     index = pd.DatetimeIndex(dates, name="datetime")
     data = pd.DataFrame(
@@ -289,7 +346,7 @@ def prepare_dataset_daily(data_dir: Path, case: int):
             "close": np.full(len(index), 100),
             "volume": np.full(len(index), 1000),
         },
-        index=index
+        index=index,
     )
 
     apply_case(data=data, case=case)
@@ -312,7 +369,7 @@ def get_sme_sim_broker_daily(data_dir):
         symbol="TEST",
         bar_size=timedelta(days=1),
         window=10,
-        sma_offset=.1,
+        sma_offset=0.1,
         entry_n_shares=1,
     )
     trader.start()
@@ -338,7 +395,7 @@ def get_sme_sim_broker_daily(data_dir):
         (13, 10_014, 0),
         (14, 10_014, 0),
         (15, 10_014, 0),
-    ]
+    ],
 )
 def test_cases_daily(tmpdir, case, expected_acc_cash, expected_pos):
     data_dir = Path(tmpdir)

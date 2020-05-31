@@ -33,9 +33,7 @@ def bar_size_to_str(bar_size: timedelta):
 
 
 def hist_file_names(
-        start_date: date,
-        end_date: date,
-        bar_size: timedelta,
+    start_date: date, end_date: date, bar_size: timedelta,
 ):
     if is_daily(bar_size=bar_size):
         f_names = ["daily.csv"]

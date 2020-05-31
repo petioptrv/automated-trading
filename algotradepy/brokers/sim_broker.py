@@ -7,8 +7,10 @@ import pandas as pd
 from algotradepy.brokers.base import ABroker
 from algotradepy.historical.hist_utils import is_daily
 from algotradepy.historical.loaders import HistoricalRetriever
-from algotradepy.time_utils import generate_trading_schedule, \
-    get_next_trading_date
+from algotradepy.time_utils import (
+    generate_trading_schedule,
+    get_next_trading_date,
+)
 
 
 class SimulationEndException(Exception):
@@ -17,24 +19,22 @@ class SimulationEndException(Exception):
 
 class SimulationClock:
     def __init__(
-            self,
-            start_date: date,
-            end_date: date,
-            simulation_time_step: timedelta = timedelta(minutes=1),
-            real_time_per_tick: int = 0,
+        self,
+        start_date: date,
+        end_date: date,
+        simulation_time_step: timedelta = timedelta(minutes=1),
+        real_time_per_tick: int = 0,
     ):
         self._start_date = start_date
         self._end_date = end_date
         self._time_step = simulation_time_step
         self._time_per_tick = real_time_per_tick
         self._schedule = generate_trading_schedule(
-            start_date=start_date,
-            end_date=end_date,
+            start_date=start_date, end_date=end_date,
         )
         self._curr_schedule_index = 0
         self._clock_dt = datetime.combine(
-            self._schedule.index[0],
-            self._schedule.iloc[0]["market_open"],
+            self._schedule.index[0], self._schedule.iloc[0]["market_open"],
         )
 
     @property
@@ -102,9 +102,7 @@ class SimulationClock:
 
         time_ = dt.time()
         td = timedelta(
-            hours=time_.hour,
-            minutes=time_.minute,
-            seconds=time_.second,
+            hours=time_.hour, minutes=time_.minute, seconds=time_.second,
         )
         if not td % self._time_step == timedelta():
             raise ValueError(
@@ -160,15 +158,15 @@ class SimulationBroker(ABroker):
     """
 
     def __init__(
-            self,
-            starting_funds: float,
-            transaction_cost: float,
-            start_date: date,
-            end_date: date,
-            simulation_time_step: timedelta = timedelta(minutes=1),
-            real_time_per_tick: int = 0,
-            starting_positions: Optional[dict] = None,
-            hist_retriever: Optional[HistoricalRetriever] = None,
+        self,
+        starting_funds: float,
+        transaction_cost: float,
+        start_date: date,
+        end_date: date,
+        simulation_time_step: timedelta = timedelta(minutes=1),
+        real_time_per_tick: int = 0,
+        starting_positions: Optional[dict] = None,
+        hist_retriever: Optional[HistoricalRetriever] = None,
     ):
         ABroker.__init__(self, simulation=True)
         self._clock = SimulationClock(
@@ -216,11 +214,11 @@ class SimulationBroker(ABroker):
                 break
 
     def subscribe_to_bars(
-            self,
-            symbol: str,
-            bar_size: timedelta,
-            func: Callable,
-            fn_kwargs: Optional[dict] = None,
+        self,
+        symbol: str,
+        bar_size: timedelta,
+        func: Callable,
+        fn_kwargs: Optional[dict] = None,
     ):
         if bar_size < self._clock.time_step:
             raise NotImplementedError(
@@ -259,23 +257,17 @@ class SimulationBroker(ABroker):
             for bar_size, callbacks in self._bars_callback_table.items():
                 sub_is_daily = is_daily(bar_size=bar_size)
                 since_epoch = self._clock.datetime.timestamp()
-                if (
-                        (sub_is_daily and self._clock.end_of_day)
-                        or (not sub_is_daily
-                            and since_epoch % bar_size.seconds == 0)
+                if (sub_is_daily and self._clock.end_of_day) or (
+                    not sub_is_daily and since_epoch % bar_size.seconds == 0
                 ):
                     self._update_subscribers(
-                        bar_size=bar_size,
-                        callbacks=callbacks
+                        bar_size=bar_size, callbacks=callbacks
                     )
 
     def _update_subscribers(self, bar_size: timedelta, callbacks: dict):
         for func, params in callbacks.items():
             symbol = params["symbol"]
-            bar = self._get_latest_bar(
-                symbol=symbol,
-                bar_size=bar_size,
-            )
+            bar = self._get_latest_bar(symbol=symbol, bar_size=bar_size,)
             kwargs = params["kwargs"]
             func(bar, **kwargs)
 
@@ -286,17 +278,13 @@ class SimulationBroker(ABroker):
 
     def _get_current_price(self, symbol: str) -> float:
         bar = self._get_next_bar(
-            symbol=symbol,
-            bar_size=self._clock.time_step,
+            symbol=symbol, bar_size=self._clock.time_step,
         )
         price = bar["open"]
         return price
 
     def _get_latest_bar(self, symbol: str, bar_size: timedelta) -> pd.Series:
-        bar_data = self._get_data(
-            symbol=symbol,
-            bar_size=bar_size,
-        )
+        bar_data = self._get_data(symbol=symbol, bar_size=bar_size,)
         curr_dt = self._clock.datetime
         if is_daily(bar_size=bar_size):
             bar = bar_data.loc[curr_dt.date()]
@@ -306,10 +294,7 @@ class SimulationBroker(ABroker):
         return bar
 
     def _get_next_bar(self, symbol: str, bar_size: timedelta) -> pd.Series:
-        bar_data = self._get_data(
-            symbol=symbol,
-            bar_size=bar_size,
-        )
+        bar_data = self._get_data(symbol=symbol, bar_size=bar_size,)
         curr_dt = self._clock.datetime
         if is_daily(bar_size=bar_size):
             curr_dt += bar_size
@@ -328,9 +313,7 @@ class SimulationBroker(ABroker):
 
         bar_data = symbol_data.get(bar_size)
         if bar_data is None:
-            end_date = get_next_trading_date(
-                base_date=self._clock.end_date
-            )
+            end_date = get_next_trading_date(base_date=self._clock.end_date)
             bar_data = self._hist_retriever.retrieve_bar_data(
                 symbol=symbol,
                 bar_size=bar_size,

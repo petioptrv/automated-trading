@@ -9,7 +9,7 @@ class NoPaperTradeException(Exception):
 
 class ABroker(ABC):
     f"""The Abstract Broker class defining the broker interface.
-    
+
     Parameters
     ----------
     simulation : bool, default True
@@ -19,8 +19,7 @@ class ABroker(ABC):
     """
 
     def __init__(
-            self,
-            simulation: bool = True,
+        self, simulation: bool = True,
     ):
         self._simulation = simulation
 
@@ -37,11 +36,11 @@ class ABroker(ABC):
 
     @abstractmethod
     def subscribe_to_bars(
-            self,
-            symbol: str,
-            bar_size: timedelta,
-            func: Callable,
-            fn_kwargs: Optional[Dict] = None,
+        self,
+        symbol: str,
+        bar_size: timedelta,
+        func: Callable,
+        fn_kwargs: Optional[Dict] = None,
     ):
         """Subscribe to receiving historical bar data.
 

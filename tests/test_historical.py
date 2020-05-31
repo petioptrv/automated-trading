@@ -13,17 +13,14 @@ from tests.conftest import TEST_DATA_DIR
 
 
 def validate_data_range(
-        data: pd.DataFrame,
-        start_date: date,
-        end_date: date,
-        abs_tol: Optional[int] = 0,
-        rel_tol: Optional[float] = 0,
+    data: pd.DataFrame,
+    start_date: date,
+    end_date: date,
+    abs_tol: Optional[int] = 0,
+    rel_tol: Optional[float] = 0,
 ):
     target_dates = set(
-        generate_trading_days(
-            start_date=start_date,
-            end_date=end_date,
-        )
+        generate_trading_days(start_date=start_date, end_date=end_date,)
     )
     received_dates = set(
         [dt.date() for dt in np.unique(data.index.to_pydatetime())]
@@ -70,21 +67,18 @@ def test_retriever_cached_daily():
 
 HIST_PROVIDERS = [
     YahooProvider(),
-    IEXProvider(api_token="Tpk_98c62e8146894c4985dfb98034d7ac87"),  # todo: remove simulation token
+    IEXProvider(
+        api_token="Tpk_98c62e8146894c4985dfb98034d7ac87"
+    ),  # todo: remove simulation token
 ]
 
 
-@pytest.mark.parametrize(
-    "provider", [provider for provider in HIST_PROVIDERS]
-)
+@pytest.mark.parametrize("provider", [provider for provider in HIST_PROVIDERS])
 def test_retrieve_non_cached_daily(tmpdir, provider):
     start_date = date(2020, 4, 1)
     end_date = date(2020, 4, 2)
 
-    retriever = HistoricalRetriever(
-        provider=provider,
-        hist_data_dir=tmpdir,
-    )
+    retriever = HistoricalRetriever(provider=provider, hist_data_dir=tmpdir,)
     data = retriever.retrieve_bar_data(
         symbol="SPY",
         start_date=start_date,
@@ -95,17 +89,12 @@ def test_retrieve_non_cached_daily(tmpdir, provider):
     validate_data_range(data=data, start_date=start_date, end_date=end_date)
 
 
-@pytest.mark.parametrize(
-    "provider", [provider for provider in HIST_PROVIDERS]
-)
+@pytest.mark.parametrize("provider", [provider for provider in HIST_PROVIDERS])
 def test_retrieve_non_cached_intraday(tmpdir, provider):
     start_date = date.today() - timedelta(days=7)
     end_date = date.today() - timedelta(days=1)
 
-    retriever = HistoricalRetriever(
-        provider=provider,
-        hist_data_dir=tmpdir,
-    )
+    retriever = HistoricalRetriever(provider=provider, hist_data_dir=tmpdir,)
     data = retriever.retrieve_bar_data(
         symbol="SPY",
         start_date=start_date,
@@ -117,16 +106,9 @@ def test_retrieve_non_cached_intraday(tmpdir, provider):
     assert np.isclose(len(data), 5 * 6.5 * 60, atol=7 * 60)
 
 
-@pytest.mark.parametrize(
-    "provider", [provider for provider in HIST_PROVIDERS]
-)
-def test_retrieving_intermittently_cached_daily(
-        tmpdir, provider
-):
-    retriever = HistoricalRetriever(
-        provider=provider,
-        hist_data_dir=tmpdir,
-    )
+@pytest.mark.parametrize("provider", [provider for provider in HIST_PROVIDERS])
+def test_retrieving_intermittently_cached_daily(tmpdir, provider):
+    retriever = HistoricalRetriever(provider=provider, hist_data_dir=tmpdir,)
 
     start_date = date(2020, 3, 3)
     end_date = date(2020, 3, 3)
@@ -161,16 +143,9 @@ def test_retrieving_intermittently_cached_daily(
     validate_data_range(data=data, start_date=start_date, end_date=end_date)
 
 
-@pytest.mark.parametrize(
-    "provider", [provider for provider in HIST_PROVIDERS]
-)
-def test_retrieving_intermittently_cached_intraday(
-        tmpdir, provider
-):
-    retriever = HistoricalRetriever(
-        provider=provider,
-        hist_data_dir=tmpdir,
-    )
+@pytest.mark.parametrize("provider", [provider for provider in HIST_PROVIDERS])
+def test_retrieving_intermittently_cached_intraday(tmpdir, provider):
+    retriever = HistoricalRetriever(provider=provider, hist_data_dir=tmpdir,)
 
     data = pd.DataFrame()
     dates = generate_trading_days(
@@ -178,8 +153,8 @@ def test_retrieving_intermittently_cached_intraday(
         end_date=date.today() - timedelta(days=1),
     )
     date_ranges = [
-        dates[1: 2],
-        dates[-3: -2],
+        dates[1:2],
+        dates[-3:-2],
         dates,
     ]
     for date_range in date_ranges:

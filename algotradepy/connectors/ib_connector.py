@@ -5,9 +5,7 @@ from typing import Optional
 try:
     from ibapi.wrapper import EWrapper
     from ibapi.client import EClient
-    from ibapi.utils import (
-        iswrapper,
-    )
+    from ibapi.utils import iswrapper
 except ImportError as e:
     raise ImportError(
         f"Original Error: {e}"
@@ -69,11 +67,11 @@ class IBConnector(EWrapper, EClient, Subscribable):
     """
 
     def __init__(
-            self,
-            receiver: str = "workstation",
-            trading_mode: str = "paper",
-            socket_port: Optional[int] = None,
-            client_id: Optional[int] = None,
+        self,
+        receiver: str = "workstation",
+        trading_mode: str = "paper",
+        socket_port: Optional[int] = None,
+        client_id: Optional[int] = None,
     ):
         Subscribable.__init__(self)
         EWrapper.__init__(self)
@@ -112,18 +110,18 @@ class IBConnector(EWrapper, EClient, Subscribable):
             port=self._socket_port,
             clientId=self._client_id,
         )
-        time.sleep(.5)
+        time.sleep(0.5)
 
     def managed_disconnect(self):
         self.disconnect()
-        time.sleep(.5)
+        time.sleep(0.5)
 
 
 def build_and_start_connector(
-        receiver: str = "workstation",
-        trading_mode: str = "paper",
-        socket_port: Optional[int] = None,
-        client_id: Optional[int] = None,
+    receiver: str = "workstation",
+    trading_mode: str = "paper",
+    socket_port: Optional[int] = None,
+    client_id: Optional[int] = None,
 ) -> IBConnector:
     """Builds and prepares a connector for use.
 

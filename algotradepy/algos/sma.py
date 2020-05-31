@@ -30,16 +30,16 @@ class SMATrader:
     """
 
     def __init__(
-            self,
-            broker: ABroker,
-            symbol: str,
-            bar_size: timedelta,
-            window: int,
-            sma_offset: float,
-            entry_n_shares: int,
-            exit_start: Optional[time] = None,
-            full_exit: Optional[time] = None,
-            log: bool = False,
+        self,
+        broker: ABroker,
+        symbol: str,
+        bar_size: timedelta,
+        window: int,
+        sma_offset: float,
+        entry_n_shares: int,
+        exit_start: Optional[time] = None,
+        full_exit: Optional[time] = None,
+        log: bool = False,
     ):
         self._validate(
             symbol=symbol,
@@ -80,9 +80,7 @@ class SMATrader:
     def start(self):
         if not self._started:
             self._broker.subscribe_to_bars(
-                symbol=self._symbol,
-                bar_size=self._bar_size,
-                func=self.step,
+                symbol=self._symbol, bar_size=self._bar_size, func=self.step,
             )
         else:
             raise RuntimeError(
@@ -150,7 +148,7 @@ class SMATrader:
             logging.info(f"{self} short -> {self._entry_n_shares}")
             self.trades_log.loc[len(self.trades_log)] = [
                 self._broker.datetime,
-                Action.SHORT.value
+                Action.SHORT.value,
             ]
 
     def _open_long(self):
@@ -160,7 +158,7 @@ class SMATrader:
             logging.info(f"{self} short -> {self._entry_n_shares}")
             self.trades_log.loc[len(self.trades_log)] = [
                 self._broker.datetime,
-                Action.LONG.value
+                Action.LONG.value,
             ]
 
     def _close(self):
@@ -175,7 +173,7 @@ class SMATrader:
             logging.info(f"{self} closed -> {position}")
             self.trades_log.loc[len(self.trades_log)] = [
                 self._broker.datetime,
-                Action.CLOSE.value
+                Action.CLOSE.value,
             ]
 
     def _update_price_state(self, bar: pd.Series):
@@ -198,13 +196,13 @@ class SMATrader:
 
     @staticmethod
     def _validate(
-            symbol: str,
-            bar_size: timedelta,
-            window: int,
-            sma_offset: float,
-            entry_n_shares: int,
-            exit_start: Optional[time] = None,
-            full_exit: Optional[time] = None,
+        symbol: str,
+        bar_size: timedelta,
+        window: int,
+        sma_offset: float,
+        entry_n_shares: int,
+        exit_start: Optional[time] = None,
+        full_exit: Optional[time] = None,
     ):
         # TODO: validate symbol
         # TODO: validate bar_size
@@ -225,4 +223,3 @@ class SMATrader:
                     "When trading intraday, must provide a value for the"
                     " exit_start and full_exit parameters."
                 )
-

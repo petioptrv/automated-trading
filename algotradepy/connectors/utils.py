@@ -14,11 +14,11 @@ class Subscribable:
         self._subscriptions = {}
 
     def subscribe(
-            self,
-            target_fn: Callable,
-            callback: Callable,
-            include_target_args: bool = True,
-            callback_kwargs: Optional[dict] = None,
+        self,
+        target_fn: Callable,
+        callback: Callable,
+        include_target_args: bool = True,
+        callback_kwargs: Optional[dict] = None,
     ):
         """Subscribe to target method.
 
@@ -93,10 +93,10 @@ class Subscribable:
         attr = super().__getattribute__(item)
 
         if (
-                _subscriptions is not None
-                and not item.startswith("_")
-                and ismethod(attr)
-                and item in _subscriptions
+            _subscriptions is not None
+            and not item.startswith("_")
+            and ismethod(attr)
+            and item in _subscriptions
         ):
             attr = self._wrap_attr(attr=attr)
 

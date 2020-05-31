@@ -109,8 +109,7 @@ def test_unsubscribe(observable):
         callback_kwargs={"two": 2},
     )
     observable.unsubscribe(
-        target_fn=observable.foo,
-        callback=callback_fn_two,
+        target_fn=observable.foo, callback=callback_fn_two,
     )
 
     observable.foo(3, three=4)
@@ -130,8 +129,7 @@ def test_subscribe_to_private_raises(observable):
 
     with pytest.raises(AttributeError):
         observable.subscribe(
-            target_fn=observable._bar,
-            callback=callback_fn,
+            target_fn=observable._bar, callback=callback_fn,
         )
 
 
@@ -141,8 +139,7 @@ def test_subscribe_to_Subscribable_class_method_raises(observable):
 
     with pytest.raises(AttributeError):
         observable.subscribe(
-            target_fn=observable.subscribe,
-            callback=callback_fn,
+            target_fn=observable.subscribe, callback=callback_fn,
         )
 
 
@@ -152,6 +149,5 @@ def test_subscribe_to_non_existant_method_raises(observable):
 
     with pytest.raises(AttributeError):
         observable.subscribe(
-            target_fn=observable.baz,
-            callback=callback_fn,
+            target_fn=observable.baz, callback=callback_fn,
         )

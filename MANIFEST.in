@@ -1,0 +1,3 @@
+include versioneer.py
+include algotradepy/_version.py
+include *.txt

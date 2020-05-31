@@ -2,15 +2,23 @@ from glob import glob
 from pathlib import Path
 
 from setuptools import setup, find_packages
+import versioneer
 
 PACKAGE_PATH = Path(__file__).parent
+README = (PACKAGE_PATH / "README.md").read_text()
+LICENSE = (PACKAGE_PATH / "LICENSE.txt").read_text()
 
 setup(
-    name="AutoTraderPy",
-    version="0.1.0",
+    name="algotradepy",
+    version=versioneer.get_version(),
+    cmdclass=versioneer.get_cmdclass(),
     description="Python Auto-Trading Framework",
+    long_description=README,
+    long_description_content_type="text/markdown",
     author="Petio Petrov",
     author_email="petioptrv@icloud.com",
+    url="https://github.com/petioptrv/automated-trading",
+    license=LICENSE,
     packages=find_packages(),
     scripts=glob(str(PACKAGE_PATH / "tools" / "*.py")),
     python_requires=">=3.7",  # requires setuptools>=24.2.0, pip>=9.0.0
@@ -24,9 +32,15 @@ setup(
     ],
     extras_require={
         "ibapi": ["ibapi >=9, <10"],
-        "dev": [
-            "pytest",
-        ]
+        "dev": ["pytest", "pylint", "pre-commit", "versioneer"],
     },
+    classifiers=[
+        "Development Status :: 3 - Alpha",
+        "Intended Audience :: Developers",
+        "Intended Audience :: Science/Research",
+        "Intended Audience :: Financial and Insurance Industry",
+        "Natural Language :: English",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+    ],
 )
-

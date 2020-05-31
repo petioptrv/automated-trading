@@ -357,3 +357,4 @@ $RECYCLE.BIN/
 
 /venv/
 /histData/
+.vscode/*

@@ -32,7 +32,16 @@ setup(
     ],
     extras_require={
         "ibapi": ["ibapi >=9, <10"],
-        "dev": ["pytest", "pylint", "pre-commit", "versioneer"],
+        "dev": [
+            "pytest",
+            "pylint",
+            "pre-commit",
+            "versioneer",
+            "black",  # for Travis
+            "flake8",  # for Travis
+            "flake8-black",  # for Travis
+            "twine",
+        ],
     },
     classifiers=[
         "Development Status :: 3 - Alpha",
@@ -40,6 +49,7 @@ setup(
         "Intended Audience :: Science/Research",
         "Intended Audience :: Financial and Insurance Industry",
         "Natural Language :: English",
+        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
     ],

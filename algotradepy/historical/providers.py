@@ -26,21 +26,19 @@ class AProvider(ABC):
     _MAIN_COLS = ["open", "high", "low", "close", "volume"]
 
     def __init__(
-            self,
-            api_token: Optional[str] = None,
-            simulation: bool = True,
+        self, api_token: Optional[str] = None, simulation: bool = True,
     ):
         self._api_token = api_token
         self.simulation = simulation
 
     @abstractmethod
     def download_data(
-            self,
-            symbol: str,
-            start_date: date,
-            end_date: date,
-            bar_size: timedelta,
-            **kwargs
+        self,
+        symbol: str,
+        start_date: date,
+        end_date: date,
+        bar_size: timedelta,
+        **kwargs,
     ) -> pd.DataFrame:
         """Download historical data from the provider.
 
@@ -60,26 +58,25 @@ class AProvider(ABC):
 
 
 class YahooProvider(AProvider):
-    """Provider implementation based on top of the Yahoo! finance API.
+    """Historical data provider implementation based on the Yahoo! finance API.
 
     Notes
     -----
     Using `yfinance<https://pypi.org/project/yfinance/>`_ package.
     """
+
     def __init__(
-            self,
-            api_token: Optional[str] = None,
-            simulation: bool = True
+        self, api_token: Optional[str] = None, simulation: bool = True
     ):
         super().__init__(api_token=api_token, simulation=simulation)
 
     def download_data(
-            self,
-            symbol: str,
-            start_date: date,
-            end_date: date,
-            bar_size: timedelta,
-            **kwargs
+        self,
+        symbol: str,
+        start_date: date,
+        end_date: date,
+        bar_size: timedelta,
+        **kwargs,
     ) -> pd.DataFrame:
         import pandas_datareader as pdr
         import yfinance as yf
@@ -98,7 +95,7 @@ class YahooProvider(AProvider):
             data = self._format_data(data=data)
             if not is_daily(bar_size=bar_size):
                 end_date += timedelta(days=1)
-            data = data.loc[start_date: end_date]
+            data = data.loc[start_date:end_date]
 
         return data
 
@@ -135,8 +132,7 @@ class YahooProvider(AProvider):
 
         data.columns = [col.lower() for col in data.columns]
         remaining_cols = [
-            col for col in data.columns
-            if col not in self._MAIN_COLS
+            col for col in data.columns if col not in self._MAIN_COLS
         ]
         data = data.loc[:, self._MAIN_COLS + remaining_cols]
 
@@ -144,7 +140,9 @@ class YahooProvider(AProvider):
 
 
 class IEXProvider(AProvider):
-    """
+    """Historical data provider implementation.
+
+    TODO: Extract server-comm functionality into a connector.
 
     Notes
     -----
@@ -154,9 +152,7 @@ class IEXProvider(AProvider):
     _REQ_DATE_FORMAT = "%Y%m%d"
 
     def __init__(
-            self,
-            api_token: Optional[str] = None,
-            simulation: bool = True
+        self, api_token: Optional[str] = None, simulation: bool = True
     ):
         super().__init__(api_token=api_token, simulation=simulation)
 
@@ -172,12 +168,12 @@ class IEXProvider(AProvider):
         return url
 
     def download_data(
-            self,
-            symbol: str,
-            start_date: date,
-            end_date: date,
-            bar_size: timedelta,
-            **kwargs
+        self,
+        symbol: str,
+        start_date: date,
+        end_date: date,
+        bar_size: timedelta,
+        **kwargs,
     ):
         params = {"token": self._api_token}
 
@@ -219,8 +215,7 @@ class IEXProvider(AProvider):
         data = data.drop(["date", "label"], axis=1)
         data = data.set_index(keys="datetime")
         remaining_cols = [
-            col for col in data.columns
-            if col not in self._MAIN_COLS
+            col for col in data.columns if col not in self._MAIN_COLS
         ]
         data = data.loc[:, self._MAIN_COLS + remaining_cols]
         return data
@@ -230,15 +225,14 @@ class IEXProvider(AProvider):
         data["datetime"] = data.apply(
             func=lambda x: datetime.combine(
                 datetime.strptime(x["date"], "%Y-%m-%d").date(),
-                datetime.strptime(x["minute"], "%H:%M").time()
+                datetime.strptime(x["minute"], "%H:%M").time(),
             ),
-            axis=1
+            axis=1,
         )
         data = data.drop(["date", "minute", "label"], axis=1)
         data = data.set_index(keys="datetime")
         remaining_cols = [
-            col for col in data.columns
-            if col not in self._MAIN_COLS
+            col for col in data.columns if col not in self._MAIN_COLS
         ]
         data = data.loc[:, self._MAIN_COLS + remaining_cols]
         return data

@@ -1,5 +1,8 @@
+# Automated Trading
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg )](https://raw.githubusercontent.com/petioptrv/automated-trading/master/LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg )](https://raw.githubusercontent.com/petioptrv/automated-trading/cicd-fixes/LICENSE.txt)
+
+This repository hosts `algotradepy`, a Python framework for automated trading tools.
 
 ## Credits
 

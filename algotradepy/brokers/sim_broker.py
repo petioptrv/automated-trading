@@ -1,6 +1,6 @@
 from datetime import timedelta, date, time, datetime
 import time as real_time
-from typing import Callable, Optional
+from typing import Callable, Optional, Dict
 
 import pandas as pd
 
@@ -195,24 +195,6 @@ class SimulationBroker(ABroker):
     def datetime(self) -> datetime:
         return self._clock.datetime
 
-    def get_position(self, symbol: str, *args, **kwargs) -> int:
-        symbol = symbol.upper()
-        position = self._positions.setdefault(symbol, 0)
-        return position
-
-    def get_transaction_fee(self) -> float:
-        return self._abs_fee
-
-    def run_sim(self, cache_only: bool = True):
-        self._hist_cache_only = cache_only
-
-        while True:
-            try:
-                self._clock.tick()  # advance the time by one candle
-                self._maybe_update_subscribers()  # deliver the bar
-            except SimulationEndException:
-                break
-
     def subscribe_to_bars(
         self,
         symbol: str,
@@ -233,19 +215,44 @@ class SimulationBroker(ABroker):
         callbacks = self._bars_callback_table.setdefault(bar_size, {})
         callbacks[func] = {"symbol": symbol, "kwargs": fn_kwargs}
 
-    def buy(self, symbol: str, n_shares: int) -> bool:
+    def subscribe_to_new_orders(
+        self, func: Callable, fn_kwargs: Optional[Dict] = None
+    ):
+        # TODO: Implement.
+        # TODO: Test implementation.
+        raise NotImplementedError
+
+    def get_position(self, symbol: str, *args, **kwargs) -> int:
+        symbol = symbol.upper()
+        position = self._positions.setdefault(symbol, 0)
+        return position
+
+    def buy(self, symbol: str, n_shares: float, *args, **kwargs) -> bool:
         assert n_shares > 0
         self._add_to_position(symbol=symbol, n_shares=n_shares)
         price = self._get_current_price(symbol=symbol)
         self._cash -= n_shares * price + self.get_transaction_fee()
         return True
 
-    def sell(self, symbol: str, n_shares: int) -> bool:
+    def sell(self, symbol: str, n_shares: float, *args, **kwargs) -> bool:
         assert n_shares > 0
         self._add_to_position(symbol=symbol, n_shares=-n_shares)
         price = self._get_current_price(symbol=symbol)
         self._cash += n_shares * price - self.get_transaction_fee()
         return True
+
+    def get_transaction_fee(self) -> float:
+        return self._abs_fee
+
+    def run_sim(self, cache_only: bool = True):
+        self._hist_cache_only = cache_only
+
+        while True:
+            try:
+                self._clock.tick()  # advance the time by one candle
+                self._maybe_update_subscribers()  # deliver the bar
+            except SimulationEndException:
+                break
 
     def _maybe_update_subscribers(self):
         step_is_daily = is_daily(bar_size=self._clock.time_step)
@@ -271,7 +278,7 @@ class SimulationBroker(ABroker):
             kwargs = params["kwargs"]
             func(bar, **kwargs)
 
-    def _add_to_position(self, symbol: str, n_shares: int):
+    def _add_to_position(self, symbol: str, n_shares: float):
         symbol = symbol.upper()
         curr_pos = self._positions.setdefault(symbol, 0)
         self._positions[symbol] = curr_pos + n_shares

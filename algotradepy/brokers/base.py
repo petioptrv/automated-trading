@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from typing import Callable, Optional, Dict
 
+from algotradepy.orders import AnOrder
+
 
 class NoPaperTradeException(Exception):
     pass
@@ -54,6 +56,25 @@ class ABroker(ABC):
             The bar size to request.
         func : Callable
             The function to which to feed the bars.
+        fn_kwargs : Dict
+            Keyword arguments to feed to the callback function along with the
+            bars.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def subscribe_to_new_orders(
+        self, func: Callable, fn_kwargs: Optional[Dict] = None
+    ):
+        f"""Subscribe to being notified of all newly created orders.
+
+        The orders are transmitted only if they were successfully submitted.
+
+        Parameters
+        ----------
+        func : Callable
+            The function to which to feed the bars. It must accept {AnOrder}
+            as its sole positional argument.
         fn_kwargs : Dict
             Keyword arguments to feed to the callback function along with the
             bars.

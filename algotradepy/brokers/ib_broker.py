@@ -2,8 +2,10 @@ from datetime import datetime, timedelta
 from typing import Optional, Callable, Any, Tuple, Dict
 from threading import Lock
 from queue import Queue
+import logging
 
-from ibapi.contract import Contract
+from ibapi.contract import Contract as IbContract
+from ibapi.order import Order as IbOrder
 
 from algotradepy.brokers.base import ABroker
 from algotradepy.connectors.ib_connector import (
@@ -13,6 +15,8 @@ from algotradepy.connectors.ib_connector import (
 )
 
 from ibapi.account_summary_tags import AccountSummaryTags
+
+from algotradepy.orders import MarketOrder, AnOrder, LimitOrder, OrderStatus
 
 
 class IBBroker(ABroker):
@@ -93,7 +97,76 @@ class IBBroker(ABroker):
         func: Callable,
         fn_kwargs: Optional[dict] = None,
     ):
+        # TODO: implement.
+        # TODO: test.
         raise NotImplementedError
+
+    def subscribe_to_new_orders(
+        self, func: Callable, fn_kwargs: Optional[Dict] = None
+    ):
+        if fn_kwargs is None:
+            fn_kwargs = {}
+
+        def submitted_order_filter(
+            order_id, contract, order, order_state,
+        ):
+            # TODO: test case.
+            if order_state.status == "Submitted":
+                order = self._build_order(
+                    order_id=order_id, ib_contract=contract, ib_order=order,
+                )
+                if order is not None:
+                    func(order, **fn_kwargs)
+
+        self._ib_conn.subscribe(
+            target_fn=self._ib_conn.openOrder,
+            callback=submitted_order_filter,
+            include_target_args=True,
+        )
+        self._ib_conn.reqAutoOpenOrders(bAutoBind=True)
+
+    # ------------------------ TODO: add to ABroker ----------------------------
+
+    def subscribe_to_order_fill_updates(
+        self, func: Callable, fn_kwargs: Optional[Dict] = None
+    ):
+        """Subscribe to receiving updates on orders' fill status.
+
+        Parameters
+        ----------
+        func : Callable
+            The callback function. It must accept the order ID int and the
+        fn_kwargs : dict
+            The keyword arguments to pass to the callback function along with
+            the positional arguments.
+        """
+        if fn_kwargs is None:
+            fn_kwargs = {}
+
+        def order_status_filter(
+            order_id: int,
+            status: str,
+            filled: float,
+            remaining: float,
+            ave_fill_price: float,
+            *args,
+        ):
+            if status == "Filled":
+                status = OrderStatus(
+                    order_id=order_id,
+                    filled=filled,
+                    remaining=remaining,
+                    ave_fill_price=ave_fill_price,
+                )
+                func(status, **fn_kwargs)
+
+        self._ib_conn.subscribe(
+            target_fn=self._ib_conn.orderStatus,
+            callback=order_status_filter,
+            include_target_args=True,
+        )
+
+    # --------------------------------------------------------------------------
 
     def get_position(
         self, symbol: str, *args, account: Optional[str] = None, **kwargs
@@ -120,31 +193,33 @@ class IBBroker(ABroker):
 
         return pos
 
-    def buy(self, symbol: str, n_shares: int, **kwargs) -> bool:
-        pass
+    def buy(self, symbol: str, n_shares: float, **kwargs) -> bool:
+        # TODO: implement.
+        # TODO: test.
+        raise NotImplementedError
 
-    def sell(self, symbol: str, n_shares: int, **kwargs) -> bool:
-        pass
+    def limit_buy(
+        self, symbol: str, n_shares: float, limit_price: float, **kwargs
+    ):
+        raise NotImplementedError
+
+    def sell(self, symbol: str, n_shares: float, **kwargs) -> bool:
+        # TODO: implement.
+        # TODO: test.
+        raise NotImplementedError
 
     def get_transaction_fee(self) -> float:
-        pass
+        # TODO: implement.
+        # TODO: test.
+        raise NotImplementedError
 
-    # ------------ todo: add to ABroker -----------------
-
-    def subscribe_to_new_orders(
-        self, func: Callable, fn_kwargs: Optional[Dict] = None,
-    ):
-        if fn_kwargs is None:
-            fn_kwargs = {}
-        self._ib_conn.subscribe(
-            target_fn=self._ib_conn.openOrder,
-            callback=func,
-            include_target_args=True,
-            callback_kwargs=fn_kwargs,
-        )
+    def gain_control_of_tws_orders(self):
+        if self._ib_conn.client_id != 0:
+            raise ValueError(
+                f"The {IBConnector} client ID must be 0. Current client ID"
+                f" is {self._ib_conn.client_id}."
+            )
         self._ib_conn.reqAutoOpenOrders(bAutoBind=True)
-
-    # ---------- Requests Helpers ----------------------
 
     def _make_accumulation_request(
         self,
@@ -252,9 +327,9 @@ class IBBroker(ABroker):
     def _update_position(
         self,
         account: str,
-        contract: Contract,
+        contract: IbContract,
         position: float,
-        avgCost: float,
+        avg_cost: float,
     ):
         symbol = contract.symbol
         print(f"Updating positions {account} {contract.symbol}")
@@ -262,4 +337,35 @@ class IBBroker(ABroker):
             symbol_pos = self._positions.setdefault(symbol, {})
             symbol_pos_acc = symbol_pos.setdefault(account, {})
             symbol_pos_acc["position"] = position
-            symbol_pos_acc["ave_cost"] = avgCost
+            symbol_pos_acc["ave_cost"] = avg_cost
+
+    @staticmethod
+    def _build_order(
+        order_id: int, ib_contract: IbContract, ib_order: IbOrder,
+    ) -> Optional[AnOrder]:
+        order = None
+
+        if ib_order.orderType == "MKT":
+            order = MarketOrder(
+                order_id=order_id,
+                symbol=ib_contract.symbol,
+                action=ib_order.action,
+                quantity=ib_order.totalQuantity,
+                sec_type=ib_contract.secType,
+            )
+        elif ib_order.orderType == "LMT":
+            order = LimitOrder(
+                order_id=order_id,
+                symbol=ib_contract.symbol,
+                action=ib_order.action,
+                quantity=ib_order.totalQuantity,
+                sec_type=ib_contract.secType,
+                limit_price=ib_order.lmtPrice,
+            )
+        else:
+            logging.warning(
+                f"Order type {ib_order.orderType} not understood."
+                f" No order was built."
+            )
+
+        return order

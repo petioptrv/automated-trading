@@ -14,7 +14,7 @@ except ImportError as e:
         " from https://www.interactivebrokers.com/en/index.php?f=5041."
     )
 
-from algotradepy.connectors.utils import Subscribable
+from algotradepy.subscribable import Subscribable
 
 MASTER_CLIENT_ID = 0
 _NEXT_VALID_CLIENT_ID = -1

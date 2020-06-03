@@ -1,6 +1,6 @@
 import pytest
 
-from algotradepy.connectors.utils import Subscribable
+from algotradepy.subscribable import Subscribable
 
 
 @pytest.fixture

@@ -18,6 +18,11 @@ class ABroker(ABC):
         If set to True, the broker instance will be set to paper-trading mode.
         If a given broker implementation does not support paper-trading, it
         must raise {NoPaperTradeException}.
+
+    Notes
+    -----
+    This class is deliberately kept minial until the optimal API is established
+    and adopted by the other brokers.
     """
 
     def __init__(
@@ -37,51 +42,6 @@ class ABroker(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def subscribe_to_bars(
-        self,
-        symbol: str,
-        bar_size: timedelta,
-        func: Callable,
-        fn_kwargs: Optional[Dict] = None,
-    ):
-        """Subscribe to receiving historical bar data.
-
-        The bars are fed back as pandas.Series objects.
-
-        Parameters
-        ----------
-        symbol : str
-            The symbol for which to request historical data.
-        bar_size : timedelta
-            The bar size to request.
-        func : Callable
-            The function to which to feed the bars.
-        fn_kwargs : Dict
-            Keyword arguments to feed to the callback function along with the
-            bars.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def subscribe_to_new_orders(
-        self, func: Callable, fn_kwargs: Optional[Dict] = None
-    ):
-        f"""Subscribe to being notified of all newly created orders.
-
-        The orders are transmitted only if they were successfully submitted.
-
-        Parameters
-        ----------
-        func : Callable
-            The function to which to feed the bars. It must accept {AnOrder}
-            as its sole positional argument.
-        fn_kwargs : Dict
-            Keyword arguments to feed to the callback function along with the
-            bars.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
     def get_position(self, symbol: str, *args, **kwargs) -> float:
         """Request the currently held position for a given symbol.
 
@@ -93,42 +53,5 @@ class ABroker(ABC):
         -------
         float
             The current position for the specified symbol.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def buy(self, symbol: str, n_shares: float, *args, **kwargs) -> bool:
-        """Submit a buy order.
-
-        Parameters
-        ----------
-        symbol : str
-            The symbol for which to submit a buy order.
-        n_shares : float
-            The number of shares to buy.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def sell(self, symbol: str, n_shares: float, *args, **kwargs) -> bool:
-        """Submit a sell order.
-
-        Parameters
-        ----------
-        symbol :
-            The symbol for which to submit a sell order.
-        n_shares : float
-            The number of shares to sell
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_transaction_fee(self) -> float:
-        """Request the broker transaction cost.
-
-        Returns
-        -------
-        float
-            The cost per transaction.
         """
         raise NotImplementedError

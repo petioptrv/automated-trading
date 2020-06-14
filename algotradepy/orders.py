@@ -1,5 +1,6 @@
 from abc import ABC
 from enum import Enum
+from typing import Dict, Optional
 
 
 class OrderAction(Enum):
@@ -7,19 +8,17 @@ class OrderAction(Enum):
     SELL = 1
 
 
-class SecType(Enum):
-    STK = 0
-
-
 class OrderStatus:
     def __init__(
         self,
-        order_id: int,
+        status: str,
         filled: float,
         remaining: float,
         ave_fill_price: float,
+        order_id: Optional[int],
     ):
         self._order_id = order_id
+        self._status = status
         self._filled = filled
         self._remaining = remaining
         self._ave_fill_price = ave_fill_price
@@ -27,6 +26,10 @@ class OrderStatus:
     @property
     def order_id(self) -> int:
         return self._order_id
+
+    @property
+    def status(self):
+        return self._status
 
     @property
     def filled(self):
@@ -44,25 +47,17 @@ class OrderStatus:
 class AnOrder(ABC):
     def __init__(
         self,
-        order_id: int,
-        symbol: str,
         action: OrderAction,
         quantity: float,
-        sec_type: SecType,
+        order_id: Optional[int] = None,
     ):
         self._order_id = order_id
-        self._symbol = symbol
         self._action = action
         self._quantity = quantity
-        self._sec_type = sec_type
 
     @property
     def order_id(self) -> int:
         return self._order_id
-
-    @property
-    def symbol(self) -> str:
-        return self._symbol
 
     @property
     def action(self) -> OrderAction:
@@ -72,48 +67,45 @@ class AnOrder(ABC):
     def quantity(self) -> float:
         return self._quantity
 
-    @property
-    def sec_type(self) -> SecType:
-        return self._sec_type
+    def to_dict(self) -> Dict:
+        order_dict = {
+            "order_id": self.order_id,
+            "action": self.action,
+            "quantity": self.quantity,
+        }
+        return order_dict
 
 
 class MarketOrder(AnOrder):
     def __init__(
         self,
-        order_id: int,
-        symbol: str,
         action: OrderAction,
         quantity: float,
-        sec_type: SecType,
+        order_id: Optional[int] = None,
     ):
         super().__init__(
-            order_id=order_id,
-            symbol=symbol,
-            action=action,
-            quantity=quantity,
-            sec_type=sec_type,
+            order_id=order_id, action=action, quantity=quantity,
         )
 
 
 class LimitOrder(AnOrder):
     def __init__(
         self,
-        order_id: int,
-        symbol: str,
         action: OrderAction,
         quantity: float,
-        sec_type: SecType,
         limit_price: float,
+        order_id: Optional[int] = None,
     ):
         super().__init__(
-            order_id=order_id,
-            symbol=symbol,
-            action=action,
-            quantity=quantity,
-            sec_type=sec_type,
+            order_id=order_id, action=action, quantity=quantity,
         )
         self._limit_price = limit_price
 
     @property
     def limit_price(self) -> float:
         return self._limit_price
+
+    def to_dict(self) -> Dict:
+        order_dict = super().to_dict()
+        order_dict["limit_price"] = self.limit_price
+        return order_dict

@@ -202,6 +202,22 @@ class SimulationBroker(ABroker):
         func: Callable,
         fn_kwargs: Optional[dict] = None,
     ):
+        """Subscribe to receiving historical bar data.
+
+        The bars are fed back as pandas.Series objects.
+
+        Parameters
+        ----------
+        symbol : str
+            The symbol for which to request historical data.
+        bar_size : timedelta
+            The bar size to request.
+        func : Callable
+            The function to which to feed the bars.
+        fn_kwargs : Dict
+            Keyword arguments to feed to the callback function along with the
+            bars.
+        """
         if bar_size < self._clock.time_step:
             raise NotImplementedError(
                 f"Attempted to register for a bar-size of {bar_size} in a"
@@ -215,19 +231,21 @@ class SimulationBroker(ABroker):
         callbacks = self._bars_callback_table.setdefault(bar_size, {})
         callbacks[func] = {"symbol": symbol, "kwargs": fn_kwargs}
 
-    def subscribe_to_new_orders(
-        self, func: Callable, fn_kwargs: Optional[Dict] = None
-    ):
-        # TODO: Implement.
-        # TODO: Test implementation.
-        raise NotImplementedError
-
     def get_position(self, symbol: str, *args, **kwargs) -> int:
         symbol = symbol.upper()
         position = self._positions.setdefault(symbol, 0)
         return position
 
     def buy(self, symbol: str, n_shares: float, *args, **kwargs) -> bool:
+        """Submit a buy order.
+
+        Parameters
+        ----------
+        symbol : str
+            The symbol for which to submit a buy order.
+        n_shares : float
+            The number of shares to buy.
+        """
         assert n_shares > 0
         self._add_to_position(symbol=symbol, n_shares=n_shares)
         price = self._get_current_price(symbol=symbol)
@@ -235,6 +253,15 @@ class SimulationBroker(ABroker):
         return True
 
     def sell(self, symbol: str, n_shares: float, *args, **kwargs) -> bool:
+        """Submit a sell order.
+
+        Parameters
+        ----------
+        symbol :
+            The symbol for which to submit a sell order.
+        n_shares : float
+            The number of shares to sell
+        """
         assert n_shares > 0
         self._add_to_position(symbol=symbol, n_shares=-n_shares)
         price = self._get_current_price(symbol=symbol)
@@ -242,6 +269,13 @@ class SimulationBroker(ABroker):
         return True
 
     def get_transaction_fee(self) -> float:
+        """Request the broker transaction cost.
+
+        Returns
+        -------
+        float
+            The cost per transaction.
+        """
         return self._abs_fee
 
     def run_sim(self, cache_only: bool = True):

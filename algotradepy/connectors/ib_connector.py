@@ -18,6 +18,7 @@ from algotradepy.subscribable import Subscribable
 
 MASTER_CLIENT_ID = 0
 _NEXT_VALID_CLIENT_ID = -1
+SERVER_BUFFER_TIME = 0.2
 
 
 def _get_client_id() -> int:
@@ -110,11 +111,11 @@ class IBConnector(EWrapper, EClient, Subscribable):
             port=self._socket_port,
             clientId=self._client_id,
         )
-        time.sleep(0.5)
+        time.sleep(SERVER_BUFFER_TIME)
 
     def managed_disconnect(self):
         self.disconnect()
-        time.sleep(0.5)
+        time.sleep(SERVER_BUFFER_TIME)
 
 
 def build_and_start_connector(
@@ -150,9 +151,9 @@ def build_and_start_connector(
     req_id = None
     connector = None
 
-    def update_req_id(reqId):
+    def update_req_id(id_):
         nonlocal req_id
-        req_id = reqId
+        req_id = id_
 
     while req_id is None:
         connector = IBConnector(
@@ -172,7 +173,7 @@ def build_and_start_connector(
         connector.reqIds(numIds=1)
 
         if req_id is None:
-            time.sleep(1)
+            time.sleep(SERVER_BUFFER_TIME)  # give it another chance
             if req_id is None:
                 connector.managed_disconnect()
                 req_id = None  # for synchronization

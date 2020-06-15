@@ -5,9 +5,14 @@ import numpy as np
 import pytest
 from threading import Thread
 
-from algotradepy.connectors.ib_connector import SERVER_BUFFER_TIME
-from algotradepy.contracts import AContract, STKContract
-from algotradepy.orders import AnOrder, OrderStatus, LimitOrder, OrderAction
+from algotradepy.contracts import AContract, StockContract
+from algotradepy.orders import (
+    AnOrder,
+    OrderStatus,
+    LimitOrder,
+    OrderAction,
+    MarketOrder,
+)
 from algotradepy.subscribable import Subscribable
 
 
@@ -44,46 +49,47 @@ def test_datetime():
     assert np.isclose(broker_dt.second, curr_dt.second, atol=2)
 
 
-def test_get_position_non_master_id_raises():
+def get_broker(client_id: int):
     pytest.importorskip("ibapi")
-    from algotradepy.connectors.ib_connector import (
-        build_and_start_connector,
-        MASTER_CLIENT_ID,
-    )
+    from algotradepy.connectors.ib_connector import build_and_start_connector
     from algotradepy.brokers.ib_broker import IBBroker
 
-    conn = build_and_start_connector(client_id=MASTER_CLIENT_ID + 1)
+    conn = build_and_start_connector(client_id=client_id)
     broker = IBBroker(ib_connector=conn)
 
-    with pytest.raises(AttributeError):
-        broker.get_position(symbol="SPY")
-
-    conn.managed_disconnect()
+    return broker
 
 
-@pytest.fixture
-def broker():
+@pytest.fixture()
+def master_broker():
     pytest.importorskip("ibapi")
-    from algotradepy.connectors.ib_connector import (
-        build_and_start_connector,
-        MASTER_CLIENT_ID,
-    )
-    from algotradepy.brokers.ib_broker import IBBroker
+    from algotradepy.connectors.ib_connector import MASTER_CLIENT_ID
 
-    conn = build_and_start_connector(client_id=MASTER_CLIENT_ID)
-    broker = IBBroker(ib_connector=conn)
+    broker = get_broker(client_id=MASTER_CLIENT_ID)
 
     yield broker
 
     broker.__del__()
 
 
-@pytest.fixture
-def ib_test_broker():
+@pytest.fixture()
+def non_master_broker():
+    pytest.importorskip("ibapi")
+    from algotradepy.connectors.ib_connector import MASTER_CLIENT_ID
+
+    broker = get_broker(client_id=MASTER_CLIENT_ID + 1)
+
+    yield broker
+
+    broker.__del__()
+
+
+def get_ib_test_broker(client_id: int):
     pytest.importorskip("ibapi")
 
     from ibapi.client import EClient
     from ibapi.wrapper import EWrapper
+    from algotradepy.connectors.ib_connector import SERVER_BUFFER_TIME
 
     class TestBroker(Subscribable, EWrapper, EClient):
         def __init__(self):
@@ -106,7 +112,6 @@ def ib_test_broker():
 
     ip_address = "127.0.0.1"
     socket_port = 7497
-    client_id = 2
 
     tb.connect(
         host=ip_address, port=socket_port, clientId=client_id,
@@ -124,13 +129,34 @@ def ib_test_broker():
         tb.reqIds(numIds=1)
         time.sleep(SERVER_BUFFER_TIME)
 
+    return tb
+
+
+@pytest.fixture()
+def master_ib_test_broker():
+    pytest.importorskip("ibapi")
+
+    tb = get_ib_test_broker(client_id=0)
+
     yield tb
 
     tb.reqGlobalCancel()
     tb.disconnect()
 
 
-@pytest.fixture
+@pytest.fixture()
+def non_master_ib_test_broker():
+    pytest.importorskip("ibapi")
+
+    tb = get_ib_test_broker(client_id=2)
+
+    yield tb
+
+    tb.reqGlobalCancel()
+    tb.disconnect()
+
+
+@pytest.fixture()
 def ib_stk_contract():
     pytest.importorskip("ibapi")
     from ibapi.contract import Contract
@@ -144,7 +170,7 @@ def ib_stk_contract():
     return contract
 
 
-@pytest.fixture
+@pytest.fixture()
 def ib_mkt_buy_order():
     pytest.importorskip("ibapi")
     from ibapi.order import Order
@@ -157,7 +183,7 @@ def ib_mkt_buy_order():
     return order
 
 
-@pytest.fixture
+@pytest.fixture()
 def ib_mkt_sell_order():
     pytest.importorskip("ibapi")
     from ibapi.order import Order
@@ -170,27 +196,35 @@ def ib_mkt_sell_order():
     return order
 
 
+def test_get_position_non_master_id_raises(non_master_broker):
+    with pytest.raises(AttributeError):
+        non_master_broker.get_position(symbol="SPY")
+
+
 def test_get_position(
-    broker,
-    ib_test_broker,
+    master_broker,
+    non_master_ib_test_broker,
     ib_stk_contract,
     ib_mkt_buy_order,
     ib_mkt_sell_order,
 ):
-    initial_position = broker.get_position(symbol="SPY")
+    from algotradepy.connectors.ib_connector import SERVER_BUFFER_TIME
+
+    initial_position = master_broker.get_position(symbol="SPY")
     order_filled = False
-    target_order_id = ib_test_broker.valid_id
+    target_order_id = non_master_ib_test_broker.valid_id
 
     def order_status_custom(order_id, status, *args):
         nonlocal order_filled, target_order_id
         if order_id == target_order_id and status == "Filled":
             order_filled = True
 
-    ib_test_broker.subscribe(
-        target_fn=ib_test_broker.orderStatus, callback=order_status_custom,
+    non_master_ib_test_broker.subscribe(
+        target_fn=non_master_ib_test_broker.orderStatus,
+        callback=order_status_custom,
     )
 
-    ib_test_broker.placeOrder(
+    non_master_ib_test_broker.placeOrder(
         orderId=target_order_id,
         contract=ib_stk_contract,
         order=ib_mkt_buy_order,
@@ -199,13 +233,13 @@ def test_get_position(
     while not order_filled:
         time.sleep(SERVER_BUFFER_TIME)
 
-    spy_position = broker.get_position(symbol="SPY")
+    spy_position = master_broker.get_position(symbol="SPY")
 
     assert spy_position == initial_position + 1
 
     order_filled = False
     target_order_id = target_order_id + 1
-    ib_test_broker.placeOrder(
+    non_master_ib_test_broker.placeOrder(
         orderId=target_order_id,
         contract=ib_stk_contract,
         order=ib_mkt_sell_order,
@@ -214,30 +248,34 @@ def test_get_position(
     while not order_filled:
         time.sleep(SERVER_BUFFER_TIME)
 
-    spy_position = broker.get_position(symbol="SPY")
+    spy_position = master_broker.get_position(symbol="SPY")
 
     assert spy_position == initial_position
 
 
 @pytest.mark.parametrize("action", [OrderAction.BUY, OrderAction.SELL])
-def test_limit_order(ib_test_broker, broker, action):
-    ib_test_broker.reqGlobalCancel()
+def test_limit_order(non_master_ib_test_broker, master_broker, action):
+    non_master_ib_test_broker.reqGlobalCancel()
 
-    contract = STKContract(symbol="SPY")
+    contract = StockContract(symbol="SPY")
     order = LimitOrder(action=action, quantity=1, limit_price=20)
-    placed = broker.place_order(contract=contract, order=order)
+    placed = master_broker.place_order(contract=contract, order=order)
 
     assert isinstance(placed, bool)
 
-    ib_test_broker.reqGlobalCancel()
+    non_master_ib_test_broker.reqGlobalCancel()
 
 
-def test_subscribe_to_new_orders(
-    broker,
-    # test_broker,
-    # stk_contract,
-    # mkt_buy_order,
-):
+def test_subscribe_to_new_order_non_master_raises(non_master_broker):
+    def dummy_fn(*_, **__):
+        pass
+
+    with pytest.raises(AttributeError):
+        master_broker.subscribe_to_new_orders(func=dummy_fn)
+
+
+@pytest.fixture()
+def order_dict_and_update_fn():
     open_orders = OrderedDict()
 
     def log_new_order(contract_: AContract, order_: AnOrder):
@@ -248,38 +286,134 @@ def test_subscribe_to_new_orders(
                 "order": order_,
             }
 
-    broker.subscribe_to_new_orders(func=log_new_order)
+    return open_orders, log_new_order
 
-    # test_broker.placeOrder(
-    #     orderId=test_broker.valid_id,
-    #     contract=stk_contract,
-    #     order=mkt_buy_order,
-    # )
 
-    print("You have 20s to place a SPY market buy order of 1 share")
-    time.sleep(20)
+def test_subscribe_to_new_tws_orders(master_broker):
+    already_logged = []
+    open_orders = OrderedDict()
+
+    # ---- Helpers ----
+
+    def log_new_order(contract_: AContract, order_: AnOrder):
+        order_id = order_.order_id
+        if order_id not in already_logged:
+            open_orders[order_id] = {
+                "contract": contract_,
+                "order": order_,
+            }
+            already_logged.append(order_id)
+
+    def await_order():
+        t0 = t1 = time.time()
+        while t1 - t0 <= 60 and len(open_orders) == 0:
+            time.sleep(1)
+            t1 = time.time()
+
+    def get_contract_and_order():
+        _, open_order_dict = open_orders.popitem()
+        contract_: AContract = open_order_dict["contract"]
+        order_: AnOrder = open_order_dict["order"]
+        return contract_, order_
+
+    # ----------------
+
+    master_broker.subscribe_to_new_orders(func=log_new_order)
+
+    print("\n\nYou have 60s to place a SPY market buy order of 1 share.")
+
+    await_order()
 
     assert len(open_orders) == 1
 
+    contract, order = get_contract_and_order()
 
-def test_subscribe_to_order_updates(
-    broker, ib_test_broker, ib_stk_contract, ib_mkt_buy_order,
+    assert contract.symbol == "SPY"
+    assert isinstance(order, MarketOrder)
+    assert order.action == OrderAction.BUY
+    assert order.quantity == 1
+
+    print(
+        "\n\nYou have 60s to place a IBKR limit sell"
+        " order of 2 shares at $1000."
+    )
+
+    await_order()
+
+    assert len(open_orders) == 1
+
+    contract, order = get_contract_and_order()
+
+    assert contract.symbol == "IBKR"
+    assert isinstance(order, LimitOrder)
+    assert order.action == OrderAction.SELL
+    assert order.quantity == 2
+    assert order.limit_price == 1000
+
+
+def test_subscribe_to_order_updates_non_master_raises(non_master_broker):
+    def dummy_fn(*_, **__):
+        pass
+
+    with pytest.raises(AttributeError):
+        master_broker.subscribe_to_order_updates(func=dummy_fn)
+
+
+def test_subscribe_to_tws_order_updates(
+    master_broker,
+    non_master_ib_test_broker,
+    ib_stk_contract,
+    ib_mkt_buy_order,
 ):
     open_orders = OrderedDict()
 
-    def log_new_order(status_: OrderStatus):
+    def log_order_status(status_: OrderStatus):
         order_id = status_.order_id
         if order_id not in open_orders:
             open_orders[order_id] = status_
 
-    broker.subscribe_to_order_updates(func=log_new_order)
+    master_broker.subscribe_to_order_updates(func=log_order_status)
 
-    ib_test_broker.placeOrder(
-        orderId=ib_test_broker.valid_id,
-        contract=ib_stk_contract,
-        order=ib_mkt_buy_order,
-    )
+    print("\n\nYou have 60s to place a SPY market buy order of 1 share.")
 
-    time.sleep(1)
+    t0 = t1 = time.time()
+    while t1 - t0 <= 60 and len(open_orders) == 0:
+        time.sleep(1)
+        t1 = time.time()
 
     assert len(open_orders) == 1
+
+    item = open_orders.popitem()
+    status: OrderStatus = item[1]
+
+    assert status.filled + status.remaining == 1
+
+
+def test_order_cancel(master_broker):
+    # TODO: fix -- it fails
+    order_received = False
+
+    def maybe_cancel_order(contract_: AContract, order_: AnOrder):
+        nonlocal order_received
+
+        if (
+            contract_.symbol == "SPY"
+            and isinstance(order_, LimitOrder)
+            and order_.action == OrderAction.BUY
+            and order_.quantity == 1
+            and order_.limit_price == 10
+        ):
+            master_broker.cancel_order(order_id=order_.order_id)
+            order_received = True
+
+    master_broker.subscribe_to_new_orders(func=maybe_cancel_order)
+
+    print(
+        "\n\nYou have 60s to place a SPY limit buy order of 1 share at $10."
+        "\nIf order does not get immediately cancelled, this test case must"
+        " be considered as FAILED."
+    )
+    t0 = t1 = time.time()
+    while t1 - t0 <= 60 and not order_received:
+        time.sleep(1)
+        t1 = time.time()

@@ -16,8 +16,8 @@ from algotradepy.connectors.ib_connector import (
 )
 from algotradepy.contracts import (
     AContract,
-    STKContract,
-    OPTContract,
+    StockContract,
+    OptionContract,
     Exchange,
     Currency,
 )
@@ -105,7 +105,7 @@ class IBBroker(ABroker):
         return dt
 
     def subscribe_to_new_orders(
-        self, func: Callable, fn_kwargs: Optional[Dict] = None
+        self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
         f"""Subscribe to being notified of all newly created orders.
 
@@ -120,7 +120,6 @@ class IBBroker(ABroker):
             Keyword arguments to feed to the callback function along with the
             bars.
         """
-        # TODO: test
         if fn_kwargs is None:
             fn_kwargs = {}
 
@@ -137,7 +136,7 @@ class IBBroker(ABroker):
                 if contract is not None and order is not None:
                     func(contract, order, **fn_kwargs)
 
-        self._ib_conn.reqAutoOpenOrders(bAutoBind=True)
+        self._gain_control_of_tws_orders()
         self._ib_conn.subscribe(
             target_fn=self._ib_conn.openOrder,
             callback=submitted_order_filter,
@@ -147,9 +146,8 @@ class IBBroker(ABroker):
     # ------------------------ TODO: add to ABroker ----------------------------
 
     def subscribe_to_order_updates(
-        self, func: Callable, fn_kwargs: Optional[Dict] = None
+        self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
-        # TODO: test
         """Subscribe to receiving updates on orders' status.
 
         Parameters
@@ -170,6 +168,8 @@ class IBBroker(ABroker):
             filled: float,
             remaining: float,
             ave_fill_price: float,
+            *_,
+            **__,
         ):
             if status in ["Submitted", "Cancelled", "Filled"]:
                 status = OrderStatus(
@@ -181,6 +181,7 @@ class IBBroker(ABroker):
                 )
                 func(status, **fn_kwargs)
 
+        self._gain_control_of_tws_orders()
         self._ib_conn.subscribe(
             target_fn=self._ib_conn.orderStatus, callback=order_status_filter,
         )
@@ -192,11 +193,11 @@ class IBBroker(ABroker):
         ib_contract = self._to_ib_contract(contract=contract)
         ib_order = self._to_ib_order(order=order)
 
-        def _update_status(id: int, status_: str, *args):
+        def _update_status(id_: int, status_: str, *args):
             nonlocal placed
             nonlocal order_id
 
-            if id == order_id and placed is None:
+            if id_ == order_id and placed is None:
                 if status_ == "Submitted":
                     placed = True
                 elif status_ == "Cancelled":
@@ -219,8 +220,6 @@ class IBBroker(ABroker):
         return placed
 
     def cancel_order(self, order_id):
-        # TODO: test
-
         self._ib_conn.cancelOrder(orderId=order_id)
 
     # --------------------------------------------------------------------------
@@ -229,7 +228,6 @@ class IBBroker(ABroker):
         self, symbol: str, *args, account: Optional[str] = None, **kwargs
     ) -> int:
         # TODO: refactor with AContract
-        # TODO: test
         if self._ib_conn.client_id != MASTER_CLIENT_ID:
             raise AttributeError(
                 f"This client ID cannot request positions. Please use a broker"
@@ -314,7 +312,6 @@ class IBBroker(ABroker):
 
         The IB Connector must have ID 0 to be eligible for this action.
         """
-        # TODO: test
         if self._ib_conn.client_id != 0:
             raise ValueError(
                 f"The {IBConnector} client ID must be 0. Current client ID"
@@ -329,11 +326,11 @@ class IBBroker(ABroker):
         contract = None
 
         if ib_contract.secType == "STK":
-            contract = STKContract(
+            contract = StockContract(
                 con_id=ib_contract.conId, symbol=ib_contract.symbol,
             )
         elif ib_contract.secType == "OPT":
-            contract = OPTContract(
+            contract = OptionContract(
                 con_id=ib_contract.conId,
                 symbol=ib_contract.symbol,
                 strike=ib_contract.strike,
@@ -351,17 +348,23 @@ class IBBroker(ABroker):
     @staticmethod
     def _from_ib_order(order_id: int, ib_order: IbOrder) -> Optional[AnOrder]:
         order = None
+        if ib_order.action == "BUY":
+            order_action = OrderAction.BUY
+        elif ib_order.action == "SELL":
+            order_action = OrderAction.SELL
+        else:
+            raise ValueError(f"Unknown order action {ib_order.action}.")
 
         if ib_order.orderType == "MKT":
             order = MarketOrder(
                 order_id=order_id,
-                action=ib_order.action,
+                action=order_action,
                 quantity=ib_order.totalQuantity,
             )
         elif ib_order.orderType == "LMT":
             order = LimitOrder(
                 order_id=order_id,
-                action=ib_order.action,
+                action=order_action,
                 quantity=ib_order.totalQuantity,
                 limit_price=ib_order.lmtPrice,
             )
@@ -388,9 +391,9 @@ class IBBroker(ABroker):
         else:
             raise ValueError(f"Unknown exchange {contract.exchange}.")
 
-        if isinstance(contract, STKContract):
+        if isinstance(contract, StockContract):
             ib_contract.secType = "STK"
-        elif isinstance(contract, OPTContract):
+        elif isinstance(contract, OptionContract):
             ib_contract.secType = "OPT"
             ib_contract.strike = contract.strike
             ib_contract.right = contract.right

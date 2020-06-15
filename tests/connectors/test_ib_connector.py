@@ -1,3 +1,4 @@
+import time
 from threading import Thread, active_count
 from queue import Queue
 
@@ -45,6 +46,7 @@ def test_get_req_id(connector_and_thread):
     assert req_id is not None
 
     connector.managed_disconnect()
+    time.sleep(0.1)
 
     assert not t.is_alive()
 

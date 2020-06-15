@@ -37,7 +37,7 @@ setup(
             "pylint",
             "pre-commit",
             "versioneer",
-            "black",  # for Travis
+            "black",
             "flake8",  # for Travis
             "flake8-black",  # for Travis
             "twine",

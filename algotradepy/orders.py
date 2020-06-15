@@ -67,14 +67,6 @@ class AnOrder(ABC):
     def quantity(self) -> float:
         return self._quantity
 
-    def to_dict(self) -> Dict:
-        order_dict = {
-            "order_id": self.order_id,
-            "action": self.action,
-            "quantity": self.quantity,
-        }
-        return order_dict
-
 
 class MarketOrder(AnOrder):
     def __init__(
@@ -104,8 +96,3 @@ class LimitOrder(AnOrder):
     @property
     def limit_price(self) -> float:
         return self._limit_price
-
-    def to_dict(self) -> Dict:
-        order_dict = super().to_dict()
-        order_dict["limit_price"] = self.limit_price
-        return order_dict

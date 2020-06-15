@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from datetime import date
 from enum import Enum
 from typing import Optional
 
@@ -14,6 +15,11 @@ class Exchange(Enum):
 
 class Currency(Enum):
     USD = 0
+
+
+class Right(Enum):
+    CALL = 0
+    PUT = 1
 
 
 class AContract(ABC):
@@ -46,7 +52,7 @@ class AContract(ABC):
         return self._currency
 
 
-class STKContract(AContract):
+class StockContract(AContract):
     def __init__(
         self,
         symbol: str,
@@ -59,13 +65,14 @@ class STKContract(AContract):
         )
 
 
-class OPTContract(AContract):
+class OptionContract(AContract):
     def __init__(
         self,
         symbol: str,
-        strike: float = 0.0,
-        right: str = "",
-        multiplier: str = "",
+        strike: float,
+        right: Right,
+        multiplier: float,
+        last_trade_date: date,
         con_id: Optional[int] = None,
         exchange: Optional[Exchange] = None,
         currency: Currency = Currency.USD,
@@ -76,15 +83,20 @@ class OPTContract(AContract):
         self._strike = strike
         self._right = right
         self._multiplier = multiplier
+        self._last_trade_date = last_trade_date
 
     @property
-    def strike(self):
+    def strike(self) -> float:
         return self._strike
 
     @property
-    def right(self):
+    def right(self) -> Right:
         return self._right
 
     @property
-    def multiplier(self):
+    def multiplier(self) -> float:
         return self._multiplier
+
+    @property
+    def last_trade_date(self) -> date:
+        return self._last_trade_date

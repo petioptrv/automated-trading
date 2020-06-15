@@ -1,9 +1,5 @@
 #!/bin/bash
 
-# adaptation of https://github.com/CoinAlpha/hummingbot/blob/master/install
-
-cd "$(dirname "$0")" || return 1
-
 # Compatibility logic for older Anaconda versions.
 if [ "${CONDA_EXE} " == " " ]; then
     CONDA_EXE=$( (find /opt/conda/bin/conda || find ~/anaconda3/bin/conda || \
@@ -16,16 +12,8 @@ if [ "${CONDA_EXE}_" == "_" ]; then
     echo "See: https://www.anaconda.com/distribution/"
     exit 1
 fi
-CONDA_BIN=$(dirname "${CONDA_EXE}")
-ENV_FILE=setup/environment.yml  # TODO: make file
 
-if ${CONDA_EXE} env list | grep -Eqe "^algotradepy"; then
-    ${CONDA_EXE} env update -f $ENV_FILE
-else
-    ${CONDA_EXE} env create -f $ENV_FILE
-fi
+CONDA_BIN="$(dirname "${CONDA_EXE}")"
 
-source "${CONDA_BIN}/activate" algotradepy
-
-pre-commit install
-versioneer install
+export CONDA_EXE
+export CONDA_BIN

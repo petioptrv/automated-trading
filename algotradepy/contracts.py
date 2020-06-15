@@ -3,6 +3,8 @@ from datetime import date
 from enum import Enum
 from typing import Optional
 
+from algotradepy.utils import ReprAble
+
 
 class SecType(Enum):
     STK = 0
@@ -22,7 +24,7 @@ class Right(Enum):
     PUT = 1
 
 
-class AContract(ABC):
+class AContract(ABC, ReprAble):
     def __init__(
         self,
         symbol: str,
@@ -30,6 +32,7 @@ class AContract(ABC):
         exchange: Optional[Exchange] = None,
         currency: Currency = Currency.USD,
     ):
+        super().__init__()
         self._con_id = con_id
         self._symbol = symbol
         self._exchange = exchange

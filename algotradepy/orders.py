@@ -1,6 +1,8 @@
 from abc import ABC
 from enum import Enum
-from typing import Dict, Optional
+from typing import Optional
+
+from algotradepy.utils import ReprAble
 
 
 class OrderAction(Enum):
@@ -8,7 +10,7 @@ class OrderAction(Enum):
     SELL = 1
 
 
-class OrderStatus:
+class OrderStatus(ReprAble):
     def __init__(
         self,
         status: str,
@@ -17,6 +19,7 @@ class OrderStatus:
         ave_fill_price: float,
         order_id: Optional[int],
     ):
+        super().__init__()
         self._order_id = order_id
         self._status = status
         self._filled = filled
@@ -44,13 +47,14 @@ class OrderStatus:
         return self._ave_fill_price
 
 
-class AnOrder(ABC):
+class AnOrder(ABC, ReprAble):
     def __init__(
         self,
         action: OrderAction,
         quantity: float,
         order_id: Optional[int] = None,
     ):
+        super().__init__()
         self._order_id = order_id
         self._action = action
         self._quantity = quantity

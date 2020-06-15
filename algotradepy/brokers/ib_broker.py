@@ -1,4 +1,5 @@
-from datetime import datetime
+import time
+from datetime import datetime, date
 from typing import Optional, Callable, Any, Tuple, Dict
 from threading import Lock
 from queue import Queue
@@ -12,6 +13,7 @@ from algotradepy.brokers.base import ABroker
 from algotradepy.connectors.ib_connector import (
     IBConnector,
     build_and_start_connector,
+    SERVER_BUFFER_TIME,
     MASTER_CLIENT_ID,
 )
 from algotradepy.contracts import (
@@ -30,6 +32,21 @@ from algotradepy.orders import (
 )
 
 
+_IB_FULL_DATE_FORMAT = "%Y%m%d"
+_IB_MONTH_DATE_FORMAT = "%Y%m"
+
+
+def _get_opt_trade_date(last_trade_date_str) -> date:
+    try:
+        dt = datetime.strptime(last_trade_date_str, _IB_FULL_DATE_FORMAT)
+    except ValueError:
+        dt = datetime.strptime(last_trade_date_str, _IB_MONTH_DATE_FORMAT)
+
+    date_ = dt.date()
+
+    return date_
+
+
 class IBBroker(ABroker):
     """Interactive Brokers Broker class.
 
@@ -46,6 +63,11 @@ class IBBroker(ABroker):
         A custom instance of the `IBConnector` can be supplied. If not provided,
         it is assumed that the receiver is TWS (see `IBConnector`'s
         documentation for more details).
+
+    Notes
+    -----
+    - TODO: Consider moving all server-related logic out of this class
+      (e.g. all of the request handling functionality, and req_id).
     """
 
     def __init__(
@@ -186,12 +208,16 @@ class IBBroker(ABroker):
             target_fn=self._ib_conn.orderStatus, callback=order_status_filter,
         )
 
-    def place_order(self, contract: AContract, order: AnOrder) -> bool:
+    def place_order(
+        self, contract: AContract, order: AnOrder,
+    ) -> Tuple[bool, int]:
         placed: Optional[bool] = None
 
         order_id = self._get_next_req_id()
         ib_contract = self._to_ib_contract(contract=contract)
+        ib_contract.conId = 0
         ib_order = self._to_ib_order(order=order)
+        ib_order.orderId = 0
 
         def _update_status(id_: int, status_: str, *args):
             nonlocal placed
@@ -217,7 +243,7 @@ class IBBroker(ABroker):
             target_fn=self._ib_conn.orderStatus, callback=_update_status,
         )
 
-        return placed
+        return placed, order_id
 
     def cancel_order(self, order_id):
         self._ib_conn.cancelOrder(orderId=order_id)
@@ -330,12 +356,16 @@ class IBBroker(ABroker):
                 con_id=ib_contract.conId, symbol=ib_contract.symbol,
             )
         elif ib_contract.secType == "OPT":
+            last_trade_date = _get_opt_trade_date(
+                last_trade_date_str=ib_contract.lastTradeDateOrContractMonth,
+            )
             contract = OptionContract(
                 con_id=ib_contract.conId,
                 symbol=ib_contract.symbol,
                 strike=ib_contract.strike,
                 right=ib_contract.right,
                 multiplier=ib_contract.multiplier,
+                last_trade_date=last_trade_date,
             )
         else:
             logging.warning(
@@ -492,7 +522,7 @@ class IBBroker(ABroker):
     @staticmethod
     def _await_results_from_queue(queue: Queue) -> Any:
         while queue.empty():
-            pass
+            time.sleep(SERVER_BUFFER_TIME)
         res = queue.get()
 
         return res

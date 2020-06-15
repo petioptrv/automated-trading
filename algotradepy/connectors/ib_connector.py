@@ -1,6 +1,7 @@
 import time
+from asyncio import Queue
 from threading import Thread
-from typing import Optional
+from typing import Optional, Callable, Dict, Tuple, Any
 
 try:
     from ibapi.wrapper import EWrapper
@@ -18,7 +19,7 @@ from algotradepy.subscribable import Subscribable
 
 MASTER_CLIENT_ID = 0
 _NEXT_VALID_CLIENT_ID = -1
-SERVER_BUFFER_TIME = 0.2
+SERVER_BUFFER_TIME = 0.1
 
 
 def _get_client_id() -> int:

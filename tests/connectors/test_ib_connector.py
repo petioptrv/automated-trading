@@ -6,6 +6,13 @@ import pytest
 
 from tests.conftest import PROJECT_DIR
 
+tests_ran = 0
+
+
+def increment_tests_ran():
+    global tests_ran
+    tests_ran += 1
+
 
 @pytest.fixture
 def connector_and_thread():
@@ -27,8 +34,9 @@ def update_queue(*args, queue: Queue):
     queue.put(item=args)
 
 
-def test_get_req_id(connector_and_thread, test_count):
-    test_count += 1
+def test_get_req_id(connector_and_thread):
+    increment_tests_ran()
+
     connector, t = connector_and_thread
 
     receiver_queue = Queue()
@@ -54,11 +62,12 @@ def test_get_req_id(connector_and_thread, test_count):
     assert not t.is_alive()
 
 
-def test_connector_builder_robustness(test_count):
+def test_connector_builder_robustness():
     pytest.importorskip("ibapi")
     from algotradepy.connectors.ib_connector import build_and_start_connector
 
-    test_count += 1
+    increment_tests_ran()
+
     conn0 = build_and_start_connector()
     conn1 = build_and_start_connector()
     conn2 = build_and_start_connector()
@@ -72,8 +81,9 @@ def test_connector_builder_robustness(test_count):
     conn2.managed_disconnect()
 
 
-def test_log_all_tests_run_ts(test_count):
-    assert test_count == 10
+def test_log_all_tests_run_ts():
+    global tests_ran
+    assert tests_ran == 2
 
     ts_f_path = PROJECT_DIR / "test_scripts" / "test_ib_connector_ts.log"
 

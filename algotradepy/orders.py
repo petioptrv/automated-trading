@@ -13,7 +13,7 @@ class OrderAction(Enum):
 class OrderStatus(ReprAble):
     def __init__(
         self,
-        status: str,
+        status: str,  # todo: change to Enum
         filled: float,
         remaining: float,
         ave_fill_price: float,

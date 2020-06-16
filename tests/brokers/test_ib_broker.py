@@ -16,12 +16,21 @@ from algotradepy.orders import (
 from algotradepy.subscribable import Subscribable
 from tests.conftest import PROJECT_DIR
 
+AWAIT_TIME_OUT = 10
+tests_ran = 0
 
-def test_acc_cash(test_count):
+
+def increment_tests_ran():
+    global tests_ran
+    tests_ran += 1
+
+
+def test_acc_cash():
     pytest.importorskip("ibapi")
     from algotradepy.brokers.ib_broker import IBBroker
 
-    test_count += 1
+    increment_tests_ran()
+
     broker = IBBroker()
 
     acc_cash = broker.acc_cash
@@ -32,13 +41,14 @@ def test_acc_cash(test_count):
     assert acc_cash > 0
 
 
-def test_datetime(test_count):
+def test_datetime():
     pytest.importorskip("ibapi")
     from algotradepy.brokers.ib_broker import IBBroker
 
     from datetime import datetime
 
-    test_count += 1
+    increment_tests_ran()
+
     broker = IBBroker()
 
     broker_dt = broker.datetime
@@ -100,16 +110,21 @@ def get_ib_test_broker(client_id: int):
             EWrapper.__init__(self)
             EClient.__init__(self, wrapper=self)
 
-            self.valid_id = None
+            self._valid_id = None
             self.conn_ack = False
 
         def nextValidId(self, orderId: int):
             super().nextValidId(orderId=orderId)
-            self.valid_id = orderId
+            self._valid_id = orderId
 
         def connectAck(self):
             super().connectAck()
             self.conn_ack = True
+
+        def get_increment_valid_id(self) -> int:
+            valid_id = self._valid_id
+            self._valid_id += 1
+            return valid_id
 
     tb = TestBroker()
 
@@ -128,7 +143,7 @@ def get_ib_test_broker(client_id: int):
     while not tb.conn_ack:
         time.sleep(SERVER_BUFFER_TIME)
 
-    while tb.valid_id is None:
+    while tb._valid_id is None:
         tb.reqIds(numIds=1)
         time.sleep(SERVER_BUFFER_TIME)
 
@@ -160,7 +175,7 @@ def non_master_ib_test_broker():
 
 
 @pytest.fixture()
-def ib_stk_contract():
+def ib_stk_contract_spy():
     pytest.importorskip("ibapi")
     from ibapi.contract import Contract
 
@@ -174,7 +189,7 @@ def ib_stk_contract():
 
 
 @pytest.fixture()
-def ib_mkt_buy_order():
+def ib_mkt_buy_order_1():
     pytest.importorskip("ibapi")
     from ibapi.order import Order
 
@@ -187,7 +202,7 @@ def ib_mkt_buy_order():
 
 
 @pytest.fixture()
-def ib_mkt_sell_order():
+def ib_mkt_sell_order_1():
     pytest.importorskip("ibapi")
     from ibapi.order import Order
 
@@ -199,8 +214,23 @@ def ib_mkt_sell_order():
     return order
 
 
-def test_get_position_non_master_id_raises(non_master_broker, test_count):
-    test_count += 1
+@pytest.fixture()
+def ib_lmt_sell_order_2_1000():
+    pytest.importorskip("ibapi")
+    from ibapi.order import Order
+
+    order = Order()
+    order.action = "SELL"
+    order.orderType = "LMT"
+    order.totalQuantity = 2
+    order.lmtPrice = 1000
+
+    return order
+
+
+def test_get_position_non_master_id_raises(non_master_broker):
+    increment_tests_ran()
+
     with pytest.raises(AttributeError):
         non_master_broker.get_position(symbol="SPY")
 
@@ -208,17 +238,17 @@ def test_get_position_non_master_id_raises(non_master_broker, test_count):
 def test_get_position(
     master_broker,
     non_master_ib_test_broker,
-    ib_stk_contract,
-    ib_mkt_buy_order,
-    ib_mkt_sell_order,
-    test_count,
+    ib_stk_contract_spy,
+    ib_mkt_buy_order_1,
+    ib_mkt_sell_order_1,
 ):
     from algotradepy.connectors.ib_connector import SERVER_BUFFER_TIME
 
-    test_count += 1
+    increment_tests_ran()
+
     initial_position = master_broker.get_position(symbol="SPY")
     order_filled = False
-    target_order_id = non_master_ib_test_broker.valid_id
+    target_order_id = non_master_ib_test_broker._valid_id
 
     def order_status_custom(order_id, status, *args):
         nonlocal order_filled, target_order_id
@@ -232,8 +262,8 @@ def test_get_position(
 
     non_master_ib_test_broker.placeOrder(
         orderId=target_order_id,
-        contract=ib_stk_contract,
-        order=ib_mkt_buy_order,
+        contract=ib_stk_contract_spy,
+        order=ib_mkt_buy_order_1,
     )
 
     while not order_filled:
@@ -247,8 +277,8 @@ def test_get_position(
     target_order_id = target_order_id + 1
     non_master_ib_test_broker.placeOrder(
         orderId=target_order_id,
-        contract=ib_stk_contract,
-        order=ib_mkt_sell_order,
+        contract=ib_stk_contract_spy,
+        order=ib_mkt_sell_order_1,
     )
 
     while not order_filled:
@@ -261,9 +291,10 @@ def test_get_position(
 
 @pytest.mark.parametrize("action", [OrderAction.BUY, OrderAction.SELL])
 def test_limit_order(
-    non_master_ib_test_broker, master_broker, action, test_count,
+    non_master_ib_test_broker, master_broker, action,
 ):
-    test_count += 1
+    increment_tests_ran()
+
     non_master_ib_test_broker.reqGlobalCancel()
 
     contract = StockContract(symbol="SPY")
@@ -275,10 +306,8 @@ def test_limit_order(
     non_master_ib_test_broker.reqGlobalCancel()
 
 
-def test_subscribe_to_new_order_non_master_raises(
-    non_master_broker, test_count,
-):
-    test_count += 1
+def test_subscribe_to_new_order_non_master_raises(non_master_broker):
+    increment_tests_ran()
 
     def dummy_fn(*_, **__):
         pass
@@ -302,8 +331,15 @@ def order_dict_and_update_fn():
     return open_orders, log_new_order
 
 
-def test_subscribe_to_new_tws_orders(master_broker, test_count):
-    test_count += 1
+def test_subscribe_to_new_tws_orders(
+    master_broker,
+    non_master_ib_test_broker,
+    ib_stk_contract_spy,
+    ib_mkt_buy_order_1,
+    ib_lmt_sell_order_2_1000,
+):
+    increment_tests_ran()
+
     already_logged = []
     open_orders = OrderedDict()
 
@@ -320,7 +356,7 @@ def test_subscribe_to_new_tws_orders(master_broker, test_count):
 
     def await_order():
         t0 = t1 = time.time()
-        while t1 - t0 <= 60 and len(open_orders) == 0:
+        while t1 - t0 <= AWAIT_TIME_OUT and len(open_orders) == 0:
             time.sleep(1)
             t1 = time.time()
 
@@ -333,8 +369,10 @@ def test_subscribe_to_new_tws_orders(master_broker, test_count):
     # ----------------
 
     master_broker.subscribe_to_new_orders(func=log_new_order)
-
-    print("\n\nYou have 60s to place a SPY market buy order of 1 share.")
+    valid_id = non_master_ib_test_broker.get_increment_valid_id()
+    non_master_ib_test_broker.placeOrder(
+        valid_id, ib_stk_contract_spy, ib_mkt_buy_order_1,
+    )
 
     await_order()
 
@@ -347,9 +385,9 @@ def test_subscribe_to_new_tws_orders(master_broker, test_count):
     assert order.action == OrderAction.BUY
     assert order.quantity == 1
 
-    print(
-        "\n\nYou have 60s to place a IBKR limit sell"
-        " order of 2 shares at $1000."
+    valid_id = non_master_ib_test_broker.get_increment_valid_id()
+    non_master_ib_test_broker.placeOrder(
+        valid_id, ib_stk_contract_spy, ib_lmt_sell_order_2_1000,
     )
 
     await_order()
@@ -358,17 +396,15 @@ def test_subscribe_to_new_tws_orders(master_broker, test_count):
 
     contract, order = get_contract_and_order()
 
-    assert contract.symbol == "IBKR"
+    assert contract.symbol == "SPY"
     assert isinstance(order, LimitOrder)
     assert order.action == OrderAction.SELL
     assert order.quantity == 2
     assert order.limit_price == 1000
 
 
-def test_subscribe_to_order_updates_non_master_raises(
-    non_master_broker, test_count,
-):
-    test_count += 1
+def test_subscribe_to_order_updates_non_master_raises(non_master_broker):
+    increment_tests_ran()
 
     def dummy_fn(*_, **__):
         pass
@@ -380,11 +416,11 @@ def test_subscribe_to_order_updates_non_master_raises(
 def test_subscribe_to_tws_order_updates(
     master_broker,
     non_master_ib_test_broker,
-    ib_stk_contract,
-    ib_mkt_buy_order,
-    test_count,
+    ib_stk_contract_spy,
+    ib_mkt_buy_order_1,
 ):
-    test_count += 1
+    increment_tests_ran()
+
     open_orders = OrderedDict()
 
     def log_order_status(status_: OrderStatus):
@@ -393,11 +429,13 @@ def test_subscribe_to_tws_order_updates(
             open_orders[order_id] = status_
 
     master_broker.subscribe_to_order_updates(func=log_order_status)
-
-    print("\n\nYou have 60s to place a SPY market buy order of 1 share.")
+    valid_id = non_master_ib_test_broker.get_increment_valid_id()
+    non_master_ib_test_broker.placeOrder(
+        valid_id, ib_stk_contract_spy, ib_mkt_buy_order_1,
+    )
 
     t0 = t1 = time.time()
-    while t1 - t0 <= 60 and len(open_orders) == 0:
+    while t1 - t0 <= AWAIT_TIME_OUT and len(open_orders) == 0:
         time.sleep(1)
         t1 = time.time()
 
@@ -409,8 +447,28 @@ def test_subscribe_to_tws_order_updates(
     assert status.filled + status.remaining == 1
 
 
-def test_order_cancel(master_broker, test_count):
-    test_count += 1
+def request_manual_input(msg):
+    from tkinter import Tk
+    from tkinter import Text
+    from tkinter import END
+
+    root = Tk()
+    txt = Text(root)
+    txt.pack()
+    txt.insert(END, msg)
+    root.mainloop()
+
+
+def test_order_cancel(master_broker):
+    increment_tests_ran()
+
+    open_orders = OrderedDict()
+
+    def log_cancelled_order(status_: OrderStatus):
+        order_id = status_.order_id
+        if status_.status == "Cancelled" and order_id in open_orders:
+            open_orders[order_id] = status_
+
     order_received = False
 
     def maybe_cancel_order(contract_: AContract, order_: AnOrder):
@@ -423,24 +481,38 @@ def test_order_cancel(master_broker, test_count):
             and order_.quantity == 1
             and order_.limit_price == 10
         ):
+            open_orders[order_.order_id] = None
             master_broker.cancel_order(order_id=order_.order_id)
             order_received = True
 
+    master_broker.subscribe_to_order_updates(func=log_cancelled_order)
     master_broker.subscribe_to_new_orders(func=maybe_cancel_order)
 
-    print(
-        "\n\nYou have 60s to place a SPY limit buy order of 1 share at $10."
-        "\nIf order does not get immediately cancelled, this test case must"
-        " be considered as FAILED."
+    request_manual_input(
+        msg="Place a SPY limit buy order of 1 share at $10"
+        " in TWS and close this window.\nIf your order doesn't get"
+        " immediately cancelled, this test has failed (close window"
+        " regardless)."
     )
+
     t0 = t1 = time.time()
-    while t1 - t0 <= 60 and not order_received:
+    while t1 - t0 <= AWAIT_TIME_OUT and (
+        not order_received or len(open_orders) == 0
+    ):
         time.sleep(1)
         t1 = time.time()
 
+    assert len(open_orders) == 1
 
-def test_log_all_tests_run_ts(test_count):
-    assert test_count == 10
+    item = open_orders.popitem()
+    status: OrderStatus = item[1]
+
+    assert status.status == "Cancelled"
+
+
+def test_log_all_tests_run_ts():
+    global tests_ran
+    assert tests_ran == 11
 
     ts_f_path = PROJECT_DIR / "test_scripts" / "test_ib_broker_ts.log"
 

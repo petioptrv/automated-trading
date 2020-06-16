@@ -4,6 +4,8 @@ from queue import Queue
 
 import pytest
 
+from tests.conftest import PROJECT_DIR
+
 
 @pytest.fixture
 def connector_and_thread():
@@ -25,7 +27,8 @@ def update_queue(*args, queue: Queue):
     queue.put(item=args)
 
 
-def test_get_req_id(connector_and_thread):
+def test_get_req_id(connector_and_thread, test_count):
+    test_count += 1
     connector, t = connector_and_thread
 
     receiver_queue = Queue()
@@ -46,15 +49,16 @@ def test_get_req_id(connector_and_thread):
     assert req_id is not None
 
     connector.managed_disconnect()
-    time.sleep(0.1)
+    time.sleep(1)
 
     assert not t.is_alive()
 
 
-def test_connector_builder_robustness():
+def test_connector_builder_robustness(test_count):
     pytest.importorskip("ibapi")
     from algotradepy.connectors.ib_connector import build_and_start_connector
 
+    test_count += 1
     conn0 = build_and_start_connector()
     conn1 = build_and_start_connector()
     conn2 = build_and_start_connector()
@@ -66,3 +70,13 @@ def test_connector_builder_robustness():
     conn0.managed_disconnect()
     conn1.managed_disconnect()
     conn2.managed_disconnect()
+
+
+def test_log_all_tests_run_ts(test_count):
+    assert test_count == 10
+
+    ts_f_path = PROJECT_DIR / "test_scripts" / "test_ib_connector_ts.log"
+
+    with open(file=ts_f_path, mode="w") as f:
+        ts = str(time.time())
+        f.write(ts)

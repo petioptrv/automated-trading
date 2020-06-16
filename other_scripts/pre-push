@@ -2,7 +2,6 @@
 
 from pathlib import Path
 import os
-import sys
 from datetime import date
 
 GIT_HOOKS_DIR = Path(__file__).parent
@@ -14,6 +13,13 @@ def assert_tests_ran_after_modification(
         tests_ts_path,
         *target_f_paths,
 ):
+    if not os.path.exists(tests_ts_path):
+        DNE = (
+            f"{test_suite_name} was never ran. Run the tests, commit changes,"
+            f" and push again."
+        )
+        raise SystemExit(DNE)
+
     with open(tests_ts_path) as f:
         tests_ts = int(f.read().strip())
 
@@ -31,17 +37,28 @@ def assert_tests_ran_after_modification(
         last_mod_ts_date_str = date.fromtimestamp(latest_mod_ts).strftime(
             "%Y-%m-%d"
         )
-        print(f"\n{test_suite_name} was last ran on {test_ts_date_str}, but"
-              f"\n{latest_mod_f} was modified on {last_mod_ts_date_str}."
-              f"\nRun test, commit changes, and push again.")
-        sys.exit(os.EX_USAGE)
+        DNE = (
+            f"\n{test_suite_name} was last ran on {test_ts_date_str}, but"
+            f"\n{latest_mod_f} was modified on {last_mod_ts_date_str}."
+            f"\nRun test, commit changes, and push again."
+        )
+        raise SystemExit(DNE)
 
 
-IB_TESTS_RUN_TS_F_PATH = PROJECT_DIR / "test_scripts" / "ib_tests_run_ts"
+IB_BROKER_TEST_TS_F_PATH = (
+        PROJECT_DIR / "test_scripts" / "test_ib_broker_ts.log"
+)
 IB_BROKER_F_PATH = PROJECT_DIR / "algotradepy" / "brokers" / "ib_broker.py"
+assert_tests_ran_after_modification(
+    "ib_broker_tests", IB_BROKER_TEST_TS_F_PATH, IB_BROKER_F_PATH,
+)
+
+IB_CONNECTOR_TEST_TS_F_PATH = (
+        PROJECT_DIR / "test_scripts" / "test_ib_connector_ts.log"
+)
 IB_CONNECTOR_F_PATH = (
         PROJECT_DIR / "algotradepy" / "connectors" / "ib_connector.py"
 )
 assert_tests_ran_after_modification(
-    "ib_tests", IB_TESTS_RUN_TS_F_PATH, IB_BROKER_F_PATH, IB_CONNECTOR_F_PATH
+    "ib_connector_tests", IB_CONNECTOR_TEST_TS_F_PATH, IB_CONNECTOR_F_PATH,
 )

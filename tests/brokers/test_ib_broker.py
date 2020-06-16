@@ -14,12 +14,14 @@ from algotradepy.orders import (
     MarketOrder,
 )
 from algotradepy.subscribable import Subscribable
+from tests.conftest import PROJECT_DIR
 
 
-def test_acc_cash():
+def test_acc_cash(test_count):
     pytest.importorskip("ibapi")
     from algotradepy.brokers.ib_broker import IBBroker
 
+    test_count += 1
     broker = IBBroker()
 
     acc_cash = broker.acc_cash
@@ -30,12 +32,13 @@ def test_acc_cash():
     assert acc_cash > 0
 
 
-def test_datetime():
+def test_datetime(test_count):
     pytest.importorskip("ibapi")
     from algotradepy.brokers.ib_broker import IBBroker
 
     from datetime import datetime
 
+    test_count += 1
     broker = IBBroker()
 
     broker_dt = broker.datetime
@@ -196,7 +199,8 @@ def ib_mkt_sell_order():
     return order
 
 
-def test_get_position_non_master_id_raises(non_master_broker):
+def test_get_position_non_master_id_raises(non_master_broker, test_count):
+    test_count += 1
     with pytest.raises(AttributeError):
         non_master_broker.get_position(symbol="SPY")
 
@@ -207,9 +211,11 @@ def test_get_position(
     ib_stk_contract,
     ib_mkt_buy_order,
     ib_mkt_sell_order,
+    test_count,
 ):
     from algotradepy.connectors.ib_connector import SERVER_BUFFER_TIME
 
+    test_count += 1
     initial_position = master_broker.get_position(symbol="SPY")
     order_filled = False
     target_order_id = non_master_ib_test_broker.valid_id
@@ -254,19 +260,26 @@ def test_get_position(
 
 
 @pytest.mark.parametrize("action", [OrderAction.BUY, OrderAction.SELL])
-def test_limit_order(non_master_ib_test_broker, master_broker, action):
+def test_limit_order(
+    non_master_ib_test_broker, master_broker, action, test_count,
+):
+    test_count += 1
     non_master_ib_test_broker.reqGlobalCancel()
 
     contract = StockContract(symbol="SPY")
     order = LimitOrder(action=action, quantity=1, limit_price=20)
-    placed = master_broker.place_order(contract=contract, order=order)
+    placed, _ = master_broker.place_order(contract=contract, order=order)
 
     assert isinstance(placed, bool)
 
     non_master_ib_test_broker.reqGlobalCancel()
 
 
-def test_subscribe_to_new_order_non_master_raises(non_master_broker):
+def test_subscribe_to_new_order_non_master_raises(
+    non_master_broker, test_count,
+):
+    test_count += 1
+
     def dummy_fn(*_, **__):
         pass
 
@@ -289,7 +302,8 @@ def order_dict_and_update_fn():
     return open_orders, log_new_order
 
 
-def test_subscribe_to_new_tws_orders(master_broker):
+def test_subscribe_to_new_tws_orders(master_broker, test_count):
+    test_count += 1
     already_logged = []
     open_orders = OrderedDict()
 
@@ -351,7 +365,11 @@ def test_subscribe_to_new_tws_orders(master_broker):
     assert order.limit_price == 1000
 
 
-def test_subscribe_to_order_updates_non_master_raises(non_master_broker):
+def test_subscribe_to_order_updates_non_master_raises(
+    non_master_broker, test_count,
+):
+    test_count += 1
+
     def dummy_fn(*_, **__):
         pass
 
@@ -364,7 +382,9 @@ def test_subscribe_to_tws_order_updates(
     non_master_ib_test_broker,
     ib_stk_contract,
     ib_mkt_buy_order,
+    test_count,
 ):
+    test_count += 1
     open_orders = OrderedDict()
 
     def log_order_status(status_: OrderStatus):
@@ -389,8 +409,8 @@ def test_subscribe_to_tws_order_updates(
     assert status.filled + status.remaining == 1
 
 
-def test_order_cancel(master_broker):
-    # TODO: fix -- it fails
+def test_order_cancel(master_broker, test_count):
+    test_count += 1
     order_received = False
 
     def maybe_cancel_order(contract_: AContract, order_: AnOrder):
@@ -417,3 +437,13 @@ def test_order_cancel(master_broker):
     while t1 - t0 <= 60 and not order_received:
         time.sleep(1)
         t1 = time.time()
+
+
+def test_log_all_tests_run_ts(test_count):
+    assert test_count == 10
+
+    ts_f_path = PROJECT_DIR / "test_scripts" / "test_ib_broker_ts.log"
+
+    with open(file=ts_f_path, mode="w") as f:
+        ts = str(time.time())
+        f.write(ts)

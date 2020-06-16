@@ -237,7 +237,7 @@ class IBBroker(ABroker):
         )
 
         while placed is None:
-            pass
+            time.sleep(SERVER_BUFFER_TIME)
 
         self._ib_conn.unsubscribe(
             target_fn=self._ib_conn.orderStatus, callback=_update_status,
@@ -324,7 +324,6 @@ class IBBroker(ABroker):
         avg_cost: float,
     ):
         symbol = contract.symbol
-        print(f"Updating positions {account} {contract.symbol}")
         with self._positions_lock:
             symbol_pos = self._positions.setdefault(symbol, {})
             symbol_pos_acc = symbol_pos.setdefault(account, {})

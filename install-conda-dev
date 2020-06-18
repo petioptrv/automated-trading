@@ -4,7 +4,7 @@
 
 cd "$(dirname "$0")" || return 1
 
-source other_scripts/get_conda_bin.sh
+source other_scripts/get-conda-bin
 
 ENV_FILE=environment.yml  # TODO: make file
 

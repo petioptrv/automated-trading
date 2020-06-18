@@ -1,4 +1,5 @@
 import time
+import calendar
 from datetime import datetime, date
 from typing import Optional, Callable, Any, Tuple, Dict
 from threading import Lock
@@ -22,6 +23,7 @@ from algotradepy.contracts import (
     OptionContract,
     Exchange,
     Currency,
+    Right,
 )
 from algotradepy.orders import (
     MarketOrder,
@@ -39,10 +41,13 @@ _IB_MONTH_DATE_FORMAT = "%Y%m"
 def _get_opt_trade_date(last_trade_date_str) -> date:
     try:
         dt = datetime.strptime(last_trade_date_str, _IB_FULL_DATE_FORMAT)
+        date_ = dt.date()
     except ValueError:
+        # month-only, set to last day of month
         dt = datetime.strptime(last_trade_date_str, _IB_MONTH_DATE_FORMAT)
-
-    date_ = dt.date()
+        date_ = dt.date()
+        last_day_of_month = calendar.monthrange(dt.year, dt.month)
+        date_ = date(date_.year, date_.month, last_day_of_month)
 
     return date_
 
@@ -210,7 +215,7 @@ class IBBroker(ABroker):
         )
 
     def place_order(
-        self, contract: AContract, order: AnOrder,
+        self, contract: AContract, order: AnOrder, await_confirm: bool = False,
     ) -> Tuple[bool, int]:
         """Place an order with specified details.
 
@@ -220,7 +225,11 @@ class IBBroker(ABroker):
             The contract definition for the order.
         order : AnOrder
             The remaining details of the order definition.
-
+        await_confirm : bool, default False
+            If set to true, will await confirmation from the server that the
+            order was placed. If used in a call that was triggered as a response
+            to a message received from the server, will make the thread hang.
+            TODO: fix.....
         Returns
         -------
         tuple of bool and int
@@ -240,24 +249,28 @@ class IBBroker(ABroker):
             nonlocal order_id
 
             if id_ == order_id and placed is None:
-                if status_ == "Submitted":
+                if "Submitted" in status_ or status_ == "Filled":
                     placed = True
-                elif status_ == "Cancelled":
+                elif "Cancelled" in status_:
                     placed = False
 
-        self._ib_conn.subscribe(
-            target_fn=self._ib_conn.orderStatus, callback=_update_status,
-        )
+        if await_confirm:
+            self._ib_conn.subscribe(
+                target_fn=self._ib_conn.orderStatus, callback=_update_status,
+            )
+
         self._ib_conn.placeOrder(
             orderId=order_id, contract=ib_contract, order=ib_order,
         )
 
-        while placed is None:
-            time.sleep(SERVER_BUFFER_TIME)
-
-        self._ib_conn.unsubscribe(
-            target_fn=self._ib_conn.orderStatus, callback=_update_status,
-        )
+        if await_confirm:
+            while placed is None:
+                time.sleep(SERVER_BUFFER_TIME)
+            self._ib_conn.unsubscribe(
+                target_fn=self._ib_conn.orderStatus, callback=_update_status,
+            )
+        else:
+            placed = True
 
         return placed, order_id
 
@@ -391,11 +404,17 @@ class IBBroker(ABroker):
             last_trade_date = _get_opt_trade_date(
                 last_trade_date_str=ib_contract.lastTradeDateOrContractMonth,
             )
+            if ib_contract.right == "C":
+                right = Right.CALL
+            elif ib_contract.right == "P":
+                right = Right.PUT
+            else:
+                raise ValueError(f"Unknown right type {ib_contract.right}.")
             contract = OptionContract(
                 con_id=ib_contract.conId,
                 symbol=ib_contract.symbol,
                 strike=ib_contract.strike,
-                right=ib_contract.right,
+                right=right,
                 multiplier=ib_contract.multiplier,
                 last_trade_date=last_trade_date,
             )
@@ -458,7 +477,15 @@ class IBBroker(ABroker):
         elif isinstance(contract, OptionContract):
             ib_contract.secType = "OPT"
             ib_contract.strike = contract.strike
-            ib_contract.right = contract.right
+            if contract.right == Right.CALL:
+                ib_contract.right = "C"
+            elif contract.right == Right.PUT:
+                ib_contract.right = "P"
+            else:
+                raise ValueError(f"Unknown right type {contract.right}.")
+            ib_contract.lastTradeDateOrContractMonth = contract.last_trade_date.strftime(
+                _IB_FULL_DATE_FORMAT
+            )
         else:
             raise TypeError(f"Unknown type of contract {type(contract)}.")
 

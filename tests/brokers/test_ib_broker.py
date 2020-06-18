@@ -153,8 +153,9 @@ def get_ib_test_broker(client_id: int):
 @pytest.fixture()
 def master_ib_test_broker():
     pytest.importorskip("ibapi")
+    from algotradepy.connectors.ib_connector import MASTER_CLIENT_ID
 
-    tb = get_ib_test_broker(client_id=0)
+    tb = get_ib_test_broker(client_id=MASTER_CLIENT_ID)
 
     yield tb
 
@@ -165,8 +166,9 @@ def master_ib_test_broker():
 @pytest.fixture()
 def non_master_ib_test_broker():
     pytest.importorskip("ibapi")
+    from algotradepy.connectors.ib_connector import MASTER_CLIENT_ID
 
-    tb = get_ib_test_broker(client_id=2)
+    tb = get_ib_test_broker(client_id=MASTER_CLIENT_ID + 1)
 
     yield tb
 

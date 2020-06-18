@@ -92,6 +92,8 @@ class IBBroker(ABroker):
 
         self._tws_orders_associated = False
 
+        self._get_next_req_id()
+
     def __del__(self):
         if self._positions is not None:
             self._ib_conn.cancelPositions()
@@ -126,7 +128,7 @@ class IBBroker(ABroker):
 
         return dt
 
-    def subscribe_to_new_orders(
+    def subscribe_to_new_trades(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
         f"""Subscribe to being notified of all newly created orders.
@@ -150,7 +152,7 @@ class IBBroker(ABroker):
         def submitted_order_filter(
             order_id, ib_contract, ib_order, order_state
         ):
-            if order_state.status == "Submitted":
+            if "Submitted" in order_state.status:
                 contract = self._from_ib_contract(ib_contract=ib_contract)
                 order = self._from_ib_order(
                     order_id=order_id, ib_order=ib_order
@@ -167,7 +169,7 @@ class IBBroker(ABroker):
 
     # ------------------------ TODO: add to ABroker ----------------------------
 
-    def subscribe_to_order_updates(
+    def subscribe_to_trade_updates(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
         """Subscribe to receiving updates on orders' status.
@@ -193,15 +195,14 @@ class IBBroker(ABroker):
             *_,
             **__,
         ):
-            if status in ["Submitted", "Cancelled", "Filled"]:
-                status = OrderStatus(
-                    order_id=order_id,
-                    status=status,
-                    filled=filled,
-                    remaining=remaining,
-                    ave_fill_price=ave_fill_price,
-                )
-                func(status, **fn_kwargs)
+            status = OrderStatus(
+                order_id=order_id,
+                status=status,
+                filled=filled,
+                remaining=remaining,
+                ave_fill_price=ave_fill_price,
+            )
+            func(status, **fn_kwargs)
 
         self._gain_control_of_tws_orders()
         self._ib_conn.subscribe(
@@ -211,6 +212,21 @@ class IBBroker(ABroker):
     def place_order(
         self, contract: AContract, order: AnOrder,
     ) -> Tuple[bool, int]:
+        """Place an order with specified details.
+
+        Parameters
+        ----------
+        contract : AContract
+            The contract definition for the order.
+        order : AnOrder
+            The remaining details of the order definition.
+
+        Returns
+        -------
+        tuple of bool and int
+            The tuple indicates if the order has been successfully placed,
+            whereas the int is the associated order-id.
+        """
         placed: Optional[bool] = None
 
         order_id = self._get_next_req_id()
@@ -253,6 +269,23 @@ class IBBroker(ABroker):
     def get_position(
         self, symbol: str, *args, account: Optional[str] = None, **kwargs
     ) -> int:
+        """Get the current position for the specified symbol.
+
+        Parameters
+        ----------
+        symbol : str
+            The symbol for which the position is required.
+        args
+        account : str, optional, default None
+            The account for which the position is requested. If not specified,
+            all accounts' positions for that symbol are summed.
+        kwargs
+
+        Returns
+        -------
+        pos : float
+            The position for the specified symbol.
+        """
         # TODO: refactor with AContract
         if self._ib_conn.client_id != MASTER_CLIENT_ID:
             raise AttributeError(
@@ -448,7 +481,7 @@ class IBBroker(ABroker):
             ib_order.orderType = "MKT"
         elif isinstance(order, LimitOrder):
             ib_order.orderType = "LMT"
-            ib_order.lmtPrice = order.limit_price
+            ib_order.lmtPrice = round(order.limit_price, 2)
         else:
             raise TypeError(f"Unknown type of order {type(order)}.")
 

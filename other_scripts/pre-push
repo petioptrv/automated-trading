@@ -11,8 +11,9 @@ PROJECT_DIR = GIT_HOOKS_DIR.parent.parent
 def assert_tests_ran_after_modification(
     test_suite_name, tests_ts_path, *target_f_paths,
 ):
-    if not os.path.exists(str(tests_ts_path)):
+    if not tests_ts_path.exists():
         DNE = (
+            f"{test_suite_name} -- {tests_ts_path} -- {target_f_paths[0]} -- "
             f"{test_suite_name} was never ran. Run the tests, commit changes,"
             f" and push again."
         )
@@ -44,7 +45,7 @@ def assert_tests_ran_after_modification(
 
 
 IB_BROKER_TEST_TS_F_PATH = (
-    PROJECT_DIR / "test_scripts" / "test_ib_broker_ts.log",
+    PROJECT_DIR / "test_scripts" / "test_ib_broker_ts.log"
 )
 IB_BROKER_F_PATH = PROJECT_DIR / "algotradepy" / "brokers" / "ib_broker.py"
 assert_tests_ran_after_modification(

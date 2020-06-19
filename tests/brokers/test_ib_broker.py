@@ -273,20 +273,12 @@ def test_get_position(
 
     assert spy_position == initial_position + 1
 
-    order_filled = False
     target_order_id = target_order_id + 1
     non_master_ib_test_broker.placeOrder(
         orderId=target_order_id,
         contract=ib_stk_contract_spy,
         order=ib_mkt_sell_order_1,
     )
-
-    while not order_filled:
-        time.sleep(SERVER_BUFFER_TIME)
-
-    spy_position = master_broker.get_position(symbol="SPY")
-
-    assert spy_position == initial_position
 
     increment_tests_passed()
 

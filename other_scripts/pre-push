@@ -11,7 +11,7 @@ PROJECT_DIR = GIT_HOOKS_DIR.parent.parent
 def assert_tests_ran_after_modification(
     test_suite_name, tests_ts_path, *target_f_paths,
 ):
-    if not os.path.exists(tests_ts_path):
+    if not os.path.exists(str(tests_ts_path)):
         DNE = (
             f"{test_suite_name} was never ran. Run the tests, commit changes,"
             f" and push again."
@@ -19,12 +19,12 @@ def assert_tests_ran_after_modification(
         raise SystemExit(DNE)
 
     with open(tests_ts_path) as f:
-        tests_ts = int(f.read().strip())
+        tests_ts = float(f.read().strip())
 
     latest_mod_ts = -1
     latest_mod_f = None
     for f_path in target_f_paths:
-        stat = os.stat(f_path)
+        stat = os.stat(str(f_path))
         f_mod_ts = stat.st_mtime
         if f_mod_ts > latest_mod_ts:
             latest_mod_ts = f_mod_ts

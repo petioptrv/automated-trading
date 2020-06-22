@@ -2,7 +2,7 @@ from abc import ABC
 from enum import Enum
 from typing import Optional
 
-from algotradepy.utils import ReprAble
+from algotradepy.utils import ReprAble, Comparable
 
 
 class OrderAction(Enum):
@@ -10,7 +10,7 @@ class OrderAction(Enum):
     SELL = 1
 
 
-class OrderStatus(ReprAble):
+class OrderStatus(ReprAble, Comparable):
     def __init__(
         self,
         status: str,  # todo: change to Enum

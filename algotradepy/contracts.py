@@ -3,7 +3,7 @@ from datetime import date
 from enum import Enum
 from typing import Optional
 
-from algotradepy.utils import ReprAble
+from algotradepy.utils import ReprAble, Comparable
 
 
 class SecType(Enum):
@@ -24,7 +24,7 @@ class Right(Enum):
     PUT = 1
 
 
-class AContract(ABC, ReprAble):
+class AContract(ABC, ReprAble, Comparable):
     def __init__(
         self,
         symbol: str,

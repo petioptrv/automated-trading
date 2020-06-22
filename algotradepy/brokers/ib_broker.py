@@ -75,6 +75,9 @@ class IBBroker(ABroker):
       (e.g. all of the request handling functionality, and req_id).
     """
 
+    _ask_tick_types = [1, 67]
+    _bid_tick_types = [2, 66]
+
     def __init__(
         self,
         simulation: bool = True,
@@ -94,8 +97,10 @@ class IBBroker(ABroker):
         self._req_id: Optional[int] = None
         self._positions: Optional[Dict] = None
         self._positions_lock = Lock()
+        self._price_subscriptions: Optional[Dict] = None
 
         self._tws_orders_associated = False
+        self._market_data_type_set = False
 
         self._get_next_req_id()
 
@@ -214,6 +219,93 @@ class IBBroker(ABroker):
             target_fn=self._ib_conn.orderStatus, callback=order_status_filter,
         )
 
+    def subscribe_to_price_updates(
+        self,
+        contract: AContract,
+        func: Callable,
+        fn_kwargs: Optional[Dict] = None,
+        price_type: str = "market",
+    ):
+        # TODO: document
+        # TODO: test
+        if fn_kwargs is None:
+            fn_kwargs = {}
+
+        self._set_market_data_type()
+
+        req_id = self._get_next_req_id()
+        ib_contract = self._to_ib_contract(contract=contract)
+        if price_type not in ["market", "ask", "bid"]:
+            raise ValueError(
+                f"Unknown price_type '{price_type}' requested."
+                f" Please see documentation for available price types."
+            )
+
+        def _price_update(id_: int, tick_type_: int, price_: float, *_):
+            if id_ in self._price_subscriptions:
+                price_sub = self._price_subscriptions[id_]
+
+                if tick_type_ in self._ask_tick_types:
+                    price_sub["ask"] = price_
+                    if price_sub["price_type"] == "ask":
+                        func(price_, **fn_kwargs)
+                elif tick_type_ in self._bid_tick_types:
+                    price_sub["bid"] = price_
+                    if price_sub["price_type"] == "bid":
+                        func(price_, **fn_kwargs)
+
+                if (
+                    price_sub["price_type"] == "market"
+                    and price_sub["ask"] is not None
+                    and price_sub["bid"] is not None
+                ):
+                    price_ = (price_sub["ask"] + price_sub["bid"]) / 2
+                    func(price_, **fn_kwargs)
+                    price_sub["ask"] = None
+                    price_sub["bid"] = None
+
+        self._price_subscriptions[req_id] = {
+            "contract": contract,
+            "func": func,
+            "price_type": price_type,
+            "ask": None,
+            "bid": None,
+        }
+        self._ib_conn.subscribe(
+            target_fn=self._ib_conn.tickPrice, callback=_price_update,
+        )
+        self._ib_conn.reqMktData(
+            reqId=req_id,
+            contract=ib_contract,
+            genericTickList="",
+            snapshot=False,
+            regulatorySnapshot=False,
+            mktDataOptions=[],
+        )
+
+    def cancel_price_updates(self, contract: AContract, func: Callable):
+        # TODO: document
+        # TODO: test
+        if self._market_data_type_set is None:
+            raise RuntimeError("No price subscriptions were requested.")
+
+        found = False
+        for req_id, sub_dict in self._price_subscriptions.items():
+            if contract == sub_dict["contract"] and func == sub_dict["func"]:
+                self._ib_conn.cancelMktData(reqId=req_id)
+                self._ib_conn.unsubscribe(
+                    target_fn=self._ib_conn.tickPrice, callback=func,
+                )
+                del self._price_subscriptions[req_id]
+                found = True
+                break
+
+        if not found:
+            raise ValueError(
+                f"No price subscription found for contract {contract} and"
+                f" function {func}."
+            )
+
     def place_order(
         self, contract: AContract, order: AnOrder, await_confirm: bool = False,
     ) -> Tuple[bool, int]:
@@ -240,9 +332,7 @@ class IBBroker(ABroker):
 
         order_id = self._get_next_req_id()
         ib_contract = self._to_ib_contract(contract=contract)
-        ib_contract.conId = 0
         ib_order = self._to_ib_order(order=order)
-        ib_order.orderId = 0
 
         def _update_status(id_: int, status_: str, *args):
             nonlocal placed
@@ -391,6 +481,12 @@ class IBBroker(ABroker):
         if not self._tws_orders_associated:
             self._ib_conn.reqAutoOpenOrders(bAutoBind=True)
             self._tws_orders_associated = True
+
+    def _set_market_data_type(self):
+        if not self._market_data_type_set:
+            self._ib_conn.reqMarketDataType(marketDataType=4)
+            self._market_data_type_set = True
+            self._price_subscriptions = {}
 
     @staticmethod
     def _from_ib_contract(ib_contract: IbContract):

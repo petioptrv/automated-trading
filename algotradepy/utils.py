@@ -13,3 +13,21 @@ class ReprAble:
         repr_str += ">"
 
         return repr_str
+
+
+class Comparable:
+    def __eq__(self, other):
+        equal = True
+
+        if type(self) != type(other):
+            equal = False
+        else:
+            public_args = [
+                arg for arg in self.__dir__() if not arg.startswith("_")
+            ]
+            for arg in public_args:
+                if self.__getattribute__(arg) != other.__getattribute__(arg):
+                    equal = False
+                    break
+
+        return equal

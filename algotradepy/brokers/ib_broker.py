@@ -31,6 +31,7 @@ from algotradepy.orders import (
     LimitOrder,
     OrderStatus,
     OrderAction,
+    OrderState,
 )
 
 
@@ -205,9 +206,10 @@ class IBBroker(ABroker):
             *_,
             **__,
         ):
+            state = self._from_ib_state(status=status)
             status = OrderStatus(
                 order_id=order_id,
-                status=status,
+                state=state,
                 filled=filled,
                 remaining=remaining,
                 ave_fill_price=ave_fill_price,
@@ -248,11 +250,11 @@ class IBBroker(ABroker):
                 if tick_type_ in self._ask_tick_types:
                     price_sub["ask"] = price_
                     if price_sub["price_type"] == "ask":
-                        func(price_, **fn_kwargs)
+                        func(contract, price_, **fn_kwargs)
                 elif tick_type_ in self._bid_tick_types:
                     price_sub["bid"] = price_
                     if price_sub["price_type"] == "bid":
-                        func(price_, **fn_kwargs)
+                        func(contract, price_, **fn_kwargs)
 
                 if (
                     price_sub["price_type"] == "market"
@@ -370,14 +372,18 @@ class IBBroker(ABroker):
     # --------------------------------------------------------------------------
 
     def get_position(
-        self, symbol: str, *args, account: Optional[str] = None, **kwargs
+        self,
+        contract: AContract,
+        *args,
+        account: Optional[str] = None,
+        **kwargs,
     ) -> int:
         """Get the current position for the specified symbol.
 
         Parameters
         ----------
-        symbol : str
-            The symbol for which the position is required.
+        contract : AContract
+            The contract definition for which the position is required.
         args
         account : str, optional, default None
             The account for which the position is requested. If not specified,
@@ -389,7 +395,6 @@ class IBBroker(ABroker):
         pos : float
             The position for the specified symbol.
         """
-        # TODO: refactor with AContract
         if self._ib_conn.client_id != MASTER_CLIENT_ID:
             raise AttributeError(
                 f"This client ID cannot request positions. Please use a broker"
@@ -402,13 +407,15 @@ class IBBroker(ABroker):
         if self._positions is None:
             self._subscribe_to_positions()
 
-        symbol_dict: Optional[Dict] = self._positions.get(symbol)
+        symbol_dict: Optional[Dict] = self._positions.get(contract.symbol)
         if symbol_dict is not None:
             if account is None:
                 for acc, acc_dict in symbol_dict.items():
                     pos += acc_dict["position"]
             else:
                 pos += symbol_dict[account]["position"]
+        else:
+            pos = 0
 
         return pos
 
@@ -523,6 +530,40 @@ class IBBroker(ABroker):
         return contract
 
     @staticmethod
+    def _to_ib_contract(contract: AContract) -> IbContract:
+        ib_contract = IbContract()
+        if contract.con_id is not None:
+            ib_contract.conId = contract.con_id
+        ib_contract.symbol = contract.symbol
+        ib_contract.currency = contract.currency.value
+
+        if contract.exchange is None:
+            ib_contract.exchange = "SMART"
+        elif contract.exchange == Exchange.NASDAQ:
+            ib_contract.exchange = "ISLAND"
+        else:
+            ib_contract.exchange = contract.exchange.value
+
+        if isinstance(contract, StockContract):
+            ib_contract.secType = "STK"
+        elif isinstance(contract, OptionContract):
+            ib_contract.secType = "OPT"
+            ib_contract.strike = contract.strike
+            if contract.right == Right.CALL:
+                ib_contract.right = "C"
+            elif contract.right == Right.PUT:
+                ib_contract.right = "P"
+            else:
+                raise ValueError(f"Unknown right type {contract.right}.")
+            ib_contract.lastTradeDateOrContractMonth = contract.last_trade_date.strftime(
+                _IB_FULL_DATE_FORMAT
+            )
+        else:
+            raise TypeError(f"Unknown type of contract {type(contract)}.")
+
+        return ib_contract
+
+    @staticmethod
     def _from_ib_order(order_id: int, ib_order: IbOrder) -> Optional[AnOrder]:
         order = None
         if ib_order.action == "BUY":
@@ -554,48 +595,9 @@ class IBBroker(ABroker):
         return order
 
     @staticmethod
-    def _to_ib_contract(contract: AContract) -> IbContract:
-        ib_contract = IbContract()
-        if contract.con_id is not None:
-            ib_contract.conId = contract.con_id
-        ib_contract.symbol = contract.symbol
-        if contract.currency == Currency.USD:
-            ib_contract.currency = "USD"
-        else:
-            raise ValueError(f"Unknown currency {contract.currency}.")
-        if contract.exchange == Exchange.SMART or contract.exchange is None:
-            ib_contract.exchange = "SMART"
-        else:
-            raise ValueError(f"Unknown exchange {contract.exchange}.")
-
-        if isinstance(contract, StockContract):
-            ib_contract.secType = "STK"
-        elif isinstance(contract, OptionContract):
-            ib_contract.secType = "OPT"
-            ib_contract.strike = contract.strike
-            if contract.right == Right.CALL:
-                ib_contract.right = "C"
-            elif contract.right == Right.PUT:
-                ib_contract.right = "P"
-            else:
-                raise ValueError(f"Unknown right type {contract.right}.")
-            ib_contract.lastTradeDateOrContractMonth = contract.last_trade_date.strftime(
-                _IB_FULL_DATE_FORMAT
-            )
-        else:
-            raise TypeError(f"Unknown type of contract {type(contract)}.")
-
-        return ib_contract
-
-    @staticmethod
     def _to_ib_order(order: AnOrder) -> IbOrder:
         ib_order = IbOrder()
-        if order.action == OrderAction.BUY:
-            ib_order.action = "BUY"
-        elif order.action == OrderAction.SELL:
-            ib_order.action = "SELL"
-        else:
-            raise ValueError(f"Unknown order action {order.action}.")
+        ib_order.action = order.action.value
         ib_order.totalQuantity = order.quantity
         if order.order_id is not None:
             ib_order.orderId = order.order_id
@@ -609,6 +611,29 @@ class IBBroker(ABroker):
             raise TypeError(f"Unknown type of order {type(order)}.")
 
         return ib_order
+
+    @staticmethod
+    def _from_ib_state(status: str) -> OrderState:
+        if status == "ApiPending":
+            state = OrderState.PENDING
+        elif status == "PendingSubmit":
+            state = OrderState.PENDING
+        elif status == "PreSubmitted":
+            state = OrderState.SUBMITTED
+        elif status == "Submitted":
+            state = OrderState.SUBMITTED
+        elif status == "ApiCancelled":
+            state = OrderState.CANCELLED
+        elif status == "Cancelled":
+            state = OrderState.CANCELLED
+        elif status == "Filled":
+            state = OrderState.FILLED
+        elif status == "Inactive":
+            state = OrderState.INACTIVE
+        else:
+            raise ValueError(f"Unknown IB order status {status}.")
+
+        return state
 
     # ------------------------ Request Helpers ---------------------------------
 

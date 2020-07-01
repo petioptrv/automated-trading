@@ -58,13 +58,13 @@ class IBConnector(EWrapper, EClient, Subscribable):
     +---------------+----------------+-------------+
     | `receiver`    | `trading_mode` | Socket Port |
     +---------------+----------------+-------------+
+    | "workstation" | "live"         | 7496        |
+    +---------------+----------------+-------------+
     | "workstation" | "paper"        | 7497        |
     +---------------+----------------+-------------+
-    | "workstation" | "live"         | todo: get   |
+    | "gateway"     | "live"         | 4001        |
     +---------------+----------------+-------------+
-    | "gateway"     | "paper"        | todo: get   |
-    +---------------+----------------+-------------+
-    | "gateway"     | "live"         | todo: get   |
+    | "gateway"     | "paper"        | 4002        |
     +---------------+----------------+-------------+
     """
 
@@ -82,14 +82,14 @@ class IBConnector(EWrapper, EClient, Subscribable):
         self._ip_address = "127.0.0.1"
         if socket_port is not None:
             self._socket_port = socket_port
-        elif receiver == "workstation" and trading_mode == "paper":
-            self._socket_port = 7497
         elif receiver == "workstation" and trading_mode == "live":
             self._socket_port = 7596
-        elif receiver == "gateway" and trading_mode == "paper":
-            raise ValueError("Socket port not yet set.")
+        elif receiver == "workstation" and trading_mode == "paper":
+            self._socket_port = 7497
         elif receiver == "gateway" and trading_mode == "live":
-            raise ValueError("Socket port not yet set.")
+            self._socket_port = 4001
+        elif receiver == "gateway" and trading_mode == "paper":
+            self._socket_port = 4002
         else:
             raise ValueError(
                 f"Unrecognized socket port configuration receiver={receiver}"

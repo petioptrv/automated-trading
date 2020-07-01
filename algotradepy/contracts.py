@@ -6,22 +6,39 @@ from typing import Optional
 from algotradepy.utils import ReprAble, Comparable
 
 
-class SecType(Enum):
-    STK = 0
-    OPT = 1
-
-
 class Exchange(Enum):
-    SMART = 0
+    # North America
+    NYSE = "NYSE"
+    NASDAQ = "NASDAQ"
+    TSE = "TSE"
+    VENTURE = "VENTURE"
+
+    # Europe
+    FWB = "FWB"
+    IBIS = "IBIS"  # might be XETRA
+    VSE = "VSE"
+    LSE = "LSE"
+    BATEUK = "BATEUK"
+
+    # Asia/Pacific
+    SEHK = "SEHK"
+    ASX = "ASX"
+    TSEJ = "TSEJ"
 
 
 class Currency(Enum):
-    USD = 0
+    USD = "USD"
+    CAD = "CAD"
+    EUR = "EUR"
+    GBP = "GBP"
+    AUD = "AUD"
+    HKD = "HKD"
+    JPY = "JPY"
 
 
 class Right(Enum):
-    CALL = 0
-    PUT = 1
+    CALL = "CALL"
+    PUT = "PUT"
 
 
 class AContract(ABC, ReprAble, Comparable):
@@ -50,9 +67,19 @@ class AContract(ABC, ReprAble, Comparable):
     def exchange(self) -> Optional[Exchange]:
         return self._exchange
 
+    @exchange.setter
+    def exchange(self, ex: Exchange):
+        assert isinstance(ex, Exchange)
+        self._exchange = ex
+
     @property
     def currency(self) -> Currency:
         return self._currency
+
+    @currency.setter
+    def currency(self, cu: Currency):
+        assert isinstance(cu, Currency)
+        self._currency = cu
 
 
 class StockContract(AContract):

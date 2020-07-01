@@ -6,14 +6,22 @@ from algotradepy.utils import ReprAble, Comparable
 
 
 class OrderAction(Enum):
-    BUY = 0
-    SELL = 1
+    BUY = "BUY"
+    SELL = "SELL"
+
+
+class OrderState(Enum):
+    SUBMITTED = "SUBMITTED"
+    FILLED = "FILLED"
+    CANCELLED = "CANCELLED"
+    PENDING = "PENDING"
+    INACTIVE = "INACTIVE"
 
 
 class OrderStatus(ReprAble, Comparable):
     def __init__(
         self,
-        status: str,  # todo: change to Enum
+        state: OrderState,
         filled: float,
         remaining: float,
         ave_fill_price: float,
@@ -21,7 +29,7 @@ class OrderStatus(ReprAble, Comparable):
     ):
         super().__init__()
         self._order_id = order_id
-        self._status = status
+        self._state = state
         self._filled = filled
         self._remaining = remaining
         self._ave_fill_price = ave_fill_price
@@ -31,8 +39,8 @@ class OrderStatus(ReprAble, Comparable):
         return self._order_id
 
     @property
-    def status(self):
-        return self._status
+    def state(self):
+        return self._state
 
     @property
     def filled(self):

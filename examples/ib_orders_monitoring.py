@@ -28,7 +28,7 @@ def order_status_printout(status, **kwargs):
     print("\nSTATUS")
     print("======")
     print(f"order id: {status.order_id}")
-    print(f"status: {status.status}")
+    print(f"status: {status.state.value}")
     print(f"filled: {status.filled}")
     print(f"remaining: {status.remaining}")
     print(f"ave fill price: {status.ave_fill_price}")

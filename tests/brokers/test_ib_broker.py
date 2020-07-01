@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from threading import Thread
 
-from algotradepy.contracts import AContract, StockContract
+from algotradepy.contracts import AContract, StockContract, Exchange, Currency
 from algotradepy.orders import (
     AnOrder,
     OrderStatus,
@@ -230,15 +230,25 @@ def ib_lmt_sell_order_2_1000():
     return order
 
 
-def test_get_position_non_master_id_raises(non_master_broker):
+@pytest.fixture()
+def spy_stock_contract():
+    contract = StockContract(symbol="SPY")
+
+    return contract
+
+
+def test_get_position_non_master_id_raises(
+    non_master_broker, spy_stock_contract,
+):
     with pytest.raises(AttributeError):
-        non_master_broker.get_position(symbol="SPY")
+        non_master_broker.get_position(contract=spy_stock_contract)
 
     increment_tests_passed()
 
 
 def test_get_position(
     master_broker,
+    spy_stock_contract,
     non_master_ib_test_broker,
     ib_stk_contract_spy,
     ib_mkt_buy_order_1,
@@ -246,7 +256,7 @@ def test_get_position(
 ):
     from algotradepy.connectors.ib_connector import SERVER_BUFFER_TIME
 
-    initial_position = master_broker.get_position(symbol="SPY")
+    initial_position = master_broker.get_position(contract=spy_stock_contract)
     order_filled = False
     target_order_id = non_master_ib_test_broker._valid_id
 
@@ -269,16 +279,22 @@ def test_get_position(
     while not order_filled:
         time.sleep(SERVER_BUFFER_TIME)
 
-    spy_position = master_broker.get_position(symbol="SPY")
+    spy_position = master_broker.get_position(contract=spy_stock_contract)
 
     assert spy_position == initial_position + 1
 
+    ib_mkt_sell_order_1.totalQuantity = spy_position
     target_order_id = target_order_id + 1
     non_master_ib_test_broker.placeOrder(
         orderId=target_order_id,
         contract=ib_stk_contract_spy,
         order=ib_mkt_sell_order_1,
     )
+    time.sleep(SERVER_BUFFER_TIME * 2)
+
+    spy_position = master_broker.get_position(contract=spy_stock_contract)
+
+    assert spy_position == 0
 
     increment_tests_passed()
 
@@ -292,11 +308,11 @@ def test_limit_order(
 
     contract = StockContract(symbol="SPY")
     order = LimitOrder(action=action, quantity=1, limit_price=20)
-    placed, _ = master_broker.place_order(contract=contract, order=order)
+    placed, _ = master_broker.place_order(
+        contract=contract, order=order, await_confirm=True
+    )
 
     assert isinstance(placed, bool)
-
-    non_master_ib_test_broker.reqGlobalCancel()
 
     increment_tests_passed()
 
@@ -443,24 +459,23 @@ def test_subscribe_to_tws_trade_updates(
 
 
 def request_manual_input(msg):
-    from tkinter import Tk
-    from tkinter import Text
-    from tkinter import END
+    from tkinter import messagebox
 
-    root = Tk()
-    txt = Text(root)
-    txt.pack()
-    txt.insert(END, msg)
-    root.mainloop()
+    messagebox.showwarning(title="Manual Input Request", message=msg)
 
 
 def test_order_cancel(master_broker):
     open_orders = OrderedDict()
+    cancel_received = False
 
     def log_cancelled_order(status_: OrderStatus):
+        nonlocal cancel_received
+
         order_id = status_.order_id
-        if status_.status == "Cancelled" and order_id in open_orders:
+        if status_.state == "Cancelled" and order_id in open_orders:
             open_orders[order_id] = status_
+
+        cancel_received = True
 
     order_received = False
 
@@ -490,7 +505,7 @@ def test_order_cancel(master_broker):
 
     t0 = t1 = time.time()
     while t1 - t0 <= AWAIT_TIME_OUT and (
-        not order_received or len(open_orders) == 0
+        not order_received or not cancel_received
     ):
         time.sleep(1)
         t1 = time.time()
@@ -500,14 +515,47 @@ def test_order_cancel(master_broker):
     item = open_orders.popitem()
     status: OrderStatus = item[1]
 
-    assert status.status == "Cancelled"
+    assert status.state == "Cancelled"
+
+    increment_tests_passed()
+
+
+@pytest.mark.parametrize(
+    "exchange,currency,symbol,size",
+    [
+        (Exchange.NYSE, Currency.USD, "SPY", 1),
+        (Exchange.NASDAQ, Currency.USD, "TSLA", 1),
+        (Exchange.TSE, Currency.CAD, "AQN", 1),
+        (Exchange.VENTURE, Currency.CAD, "VTI", 1),
+        (Exchange.FWB, Currency.EUR, "FME", 1),
+        (Exchange.IBIS, Currency.EUR, "SAP", 1),
+        (Exchange.VSE, Currency.EUR, "SBO", 1),
+        (Exchange.LSE, Currency.GBP, "BRBY", 1),
+        (Exchange.BATEUK, Currency.GBP, "GENL", 1),
+        (Exchange.SEHK, Currency.HKD, "98", 1000),
+        (Exchange.ASX, Currency.AUD, "CML", 1),
+        (Exchange.TSEJ, Currency.JPY, "2334", 100),
+    ],
+)
+def test_exchanges_and_currencies(
+    exchange, currency, symbol, size, non_master_broker, master_ib_test_broker,
+):
+    contract = StockContract(
+        symbol=symbol, exchange=exchange, currency=currency,
+    )
+    order = LimitOrder(action=OrderAction.BUY, quantity=size, limit_price=10)
+    placed, _ = non_master_broker.place_order(
+        contract=contract, order=order, await_confirm=True
+    )
+
+    assert isinstance(placed, bool)
 
     increment_tests_passed()
 
 
 def test_log_all_tests_passed_ts():
     global tests_passed
-    assert tests_passed == 11
+    assert tests_passed == 23
 
     ts_f_path = PROJECT_DIR / "test_scripts" / "test_ib_broker_ts.log"
 

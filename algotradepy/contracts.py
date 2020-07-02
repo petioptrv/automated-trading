@@ -6,6 +6,12 @@ from typing import Optional
 from algotradepy.utils import ReprAble, Comparable
 
 
+class PriceType(Enum):
+    MARKET = "MARKET"
+    ASK = "ASK"
+    BID = "BID"
+
+
 class Exchange(Enum):
     # North America
     NYSE = "NYSE"
@@ -27,10 +33,15 @@ class Exchange(Enum):
 
 
 class Currency(Enum):
+    # North Americ
     USD = "USD"
     CAD = "CAD"
+
+    # Europe
     EUR = "EUR"
     GBP = "GBP"
+
+    # Asia/Pacific
     AUD = "AUD"
     HKD = "HKD"
     JPY = "JPY"

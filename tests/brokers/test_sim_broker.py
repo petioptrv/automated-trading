@@ -9,6 +9,7 @@ from algotradepy.brokers.sim_broker import (
     SimulationClock,
     SimulationEndException,
 )
+from algotradepy.contracts import StockContract
 from algotradepy.historical.loaders import HistoricalRetriever
 from tests.conftest import TEST_DATA_DIR
 
@@ -153,7 +154,13 @@ def test_simulation_clock_reverse_date(sim_clock):
         sim_clock.set_datetime(datetime(2020, 1, 8, 8))
 
 
-def test_simulation_broker_init():
+@pytest.fixture()
+def spy_stock_contract():
+    contract = StockContract(symbol="SPY")
+    return contract
+
+
+def test_simulation_broker_init(spy_stock_contract):
     broker = SimulationBroker(
         starting_funds=1_000,
         transaction_cost=1,
@@ -164,7 +171,7 @@ def test_simulation_broker_init():
     )
 
     assert broker.acc_cash == 1_000
-    assert broker.get_position("SPY") == 0
+    assert broker.get_position(contract=spy_stock_contract) == 0
     assert broker.get_transaction_fee() == 1
 
 
@@ -181,10 +188,10 @@ def sim_broker_15m():
     return broker
 
 
-def test_simulation_broker_buy(sim_broker_15m):
+def test_simulation_broker_buy(sim_broker_15m, spy_stock_contract):
     broker = sim_broker_15m
 
-    assert broker.get_position("SPY") == 0
+    assert broker.get_position(contract=spy_stock_contract) == 0
 
     broker._clock.tick()  # TODO: remove use of implementation details
     broker.buy(symbol="SPY", n_shares=1)
@@ -192,13 +199,13 @@ def test_simulation_broker_buy(sim_broker_15m):
     spy_2020_4_6_9_45_open = 257.78
 
     assert np.isclose(broker.acc_cash, 1000 - spy_2020_4_6_9_45_open - 1,)
-    assert broker.get_position("SPY") == 1
+    assert broker.get_position(contract=spy_stock_contract) == 1
 
 
 def test_simulation_broker_sell(sim_broker_15m):
     broker = sim_broker_15m
 
-    assert broker.get_position("SPY") == 0
+    assert broker.get_position(contract=spy_stock_contract) == 0
 
     broker._clock.tick()  # TODO: remove use of implementation details
     broker.sell(symbol="SPY", n_shares=1)

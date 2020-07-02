@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Callable, Optional, Dict
 
-from algotradepy.orders import AnOrder
+from algotradepy.contracts import AContract, PriceType
+from algotradepy.orders import AnOrder, OrderStatus
 
 
 class NoPaperTradeException(Exception):
@@ -31,24 +32,80 @@ class ABroker(ABC):
         self._simulation = simulation
 
     @property
-    @abstractmethod
     def acc_cash(self) -> float:
+        """The total funds available across all accounts."""
         raise NotImplementedError
 
     @property
-    @abstractmethod
     def datetime(self) -> datetime:
         """Server date and time."""
         raise NotImplementedError
 
-    @abstractmethod
-    def get_position(self, symbol: str, *args, **kwargs) -> float:
+    def subscribe_to_new_trades(
+        self, func: Callable, fn_kwargs: Optional[Dict] = None,
+    ):
+        f"""Subscribe to being notified of all newly created orders.
+
+        The orders are transmitted only if they were successfully submitted.
+
+        Parameters
+        ----------
+        func : Callable
+            The function to which to feed the bars. It must accept {AContract}
+            and {AnOrder} as its sole positional arguments.
+        fn_kwargs : Dict
+            Keyword arguments to feed to the callback function along with the
+            bars.
+        """
+        raise NotImplementedError
+
+    def subscribe_to_trade_updates(
+        self, func: Callable, fn_kwargs: Optional[Dict] = None,
+    ):
+        f"""Subscribe to receiving updates on orders' status.
+
+        Parameters
+        ----------
+        func : Callable
+            The callback function. It must accept an {OrderStatus} as its sole
+            positional argument.
+        fn_kwargs : dict
+            The keyword arguments to pass to the callback function along with
+            the positional arguments.
+        """
+        raise NotImplementedError
+
+    def subscribe_to_price_updates(
+        self,
+        contract: AContract,
+        func: Callable,
+        fn_kwargs: Optional[Dict] = None,
+        price_type: PriceType = PriceType.MARKET,
+    ):
+        """Subscribe to price updates.
+
+        Parameters
+        ----------
+        contract : AContract
+            The contract definition for which to request price updates.
+        func : Callable
+            The callback function. It must accept a float as its sole positional
+            argument.
+        fn_kwargs : dict
+            The keyword arguments to pass to the callback function along with
+            the positional arguments.
+        price_type : PriceType
+            The price type (market, bid, ask).
+        """
+        raise NotImplementedError
+
+    def get_position(self, contract: AContract, *args, **kwargs) -> float:
         """Request the currently held position for a given symbol.
 
         Parameters
         ----------
-        symbol : str
-            The symbol for which to request position value.
+        contract : AContract
+            The contract definition for which the position is required.
         Returns
         -------
         float

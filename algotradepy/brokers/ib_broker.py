@@ -22,8 +22,8 @@ from algotradepy.contracts import (
     StockContract,
     OptionContract,
     Exchange,
-    Currency,
     Right,
+    PriceType,
 )
 from algotradepy.orders import (
     MarketOrder,
@@ -142,19 +142,6 @@ class IBBroker(ABroker):
     def subscribe_to_new_trades(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
-        f"""Subscribe to being notified of all newly created orders.
-
-        The orders are transmitted only if they were successfully submitted.
-
-        Parameters
-        ----------
-        func : Callable
-            The function to which to feed the bars. It must accept {AContract}
-            and {AnOrder} as its sole positional arguments.
-        fn_kwargs : Dict
-            Keyword arguments to feed to the callback function along with the
-            bars.
-        """
         if fn_kwargs is None:
             fn_kwargs = {}
 
@@ -178,22 +165,9 @@ class IBBroker(ABroker):
             include_target_args=True,
         )
 
-    # ------------------------ TODO: add to ABroker ----------------------------
-
     def subscribe_to_trade_updates(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
-        """Subscribe to receiving updates on orders' status.
-
-        Parameters
-        ----------
-        func : Callable
-            The callback function. It must accept an OrderStatus as its sole
-            positional argument.
-        fn_kwargs : dict
-            The keyword arguments to pass to the callback function along with
-            the positional arguments.
-        """
         if fn_kwargs is None:
             fn_kwargs = {}
 
@@ -226,9 +200,8 @@ class IBBroker(ABroker):
         contract: AContract,
         func: Callable,
         fn_kwargs: Optional[Dict] = None,
-        price_type: str = "market",
+        price_type: PriceType = PriceType.MARKET,
     ):
-        # TODO: document
         # TODO: test
         if fn_kwargs is None:
             fn_kwargs = {}
@@ -237,32 +210,28 @@ class IBBroker(ABroker):
 
         req_id = self._get_next_req_id()
         ib_contract = self._to_ib_contract(contract=contract)
-        if price_type not in ["market", "ask", "bid"]:
-            raise ValueError(
-                f"Unknown price_type '{price_type}' requested."
-                f" Please see documentation for available price types."
-            )
 
         def _price_update(id_: int, tick_type_: int, price_: float, *_):
             if id_ in self._price_subscriptions:
                 price_sub = self._price_subscriptions[id_]
+                conntract_ = price_sub["contract"]
 
                 if tick_type_ in self._ask_tick_types:
                     price_sub["ask"] = price_
-                    if price_sub["price_type"] == "ask":
-                        func(contract, price_, **fn_kwargs)
+                    if price_sub["price_type"] == PriceType.ASK:
+                        func(conntract_, price_, **fn_kwargs)
                 elif tick_type_ in self._bid_tick_types:
                     price_sub["bid"] = price_
-                    if price_sub["price_type"] == "bid":
-                        func(contract, price_, **fn_kwargs)
+                    if price_sub["price_type"] == PriceType.BID:
+                        func(conntract_, price_, **fn_kwargs)
 
                 if (
-                    price_sub["price_type"] == "market"
+                    price_sub["price_type"] == PriceType.MARKET
                     and price_sub["ask"] is not None
                     and price_sub["bid"] is not None
                 ):
                     price_ = (price_sub["ask"] + price_sub["bid"]) / 2
-                    func(price_, **fn_kwargs)
+                    func(conntract_, price_, **fn_kwargs)
                     price_sub["ask"] = None
                     price_sub["bid"] = None
 
@@ -284,6 +253,8 @@ class IBBroker(ABroker):
             regulatorySnapshot=False,
             mktDataOptions=[],
         )
+
+    # ------------------------ TODO: add to ABroker ----------------------------
 
     def cancel_price_updates(self, contract: AContract, func: Callable):
         # TODO: document
@@ -377,18 +348,16 @@ class IBBroker(ABroker):
         *args,
         account: Optional[str] = None,
         **kwargs,
-    ) -> int:
+    ) -> float:
         """Get the current position for the specified symbol.
 
         Parameters
         ----------
         contract : AContract
             The contract definition for which the position is required.
-        args
         account : str, optional, default None
             The account for which the position is requested. If not specified,
             all accounts' positions for that symbol are summed.
-        kwargs
 
         Returns
         -------

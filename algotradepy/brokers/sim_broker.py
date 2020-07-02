@@ -5,6 +5,7 @@ from typing import Callable, Optional, Dict
 import pandas as pd
 
 from algotradepy.brokers.base import ABroker
+from algotradepy.contracts import AContract, PriceType
 from algotradepy.historical.hist_utils import is_daily
 from algotradepy.historical.loaders import HistoricalRetriever
 from algotradepy.time_utils import (
@@ -231,8 +232,30 @@ class SimulationBroker(ABroker):
         callbacks = self._bars_callback_table.setdefault(bar_size, {})
         callbacks[func] = {"symbol": symbol, "kwargs": fn_kwargs}
 
-    def get_position(self, symbol: str, *args, **kwargs) -> int:
-        symbol = symbol.upper()
+    def subscribe_to_new_trades(
+        self, func: Callable, fn_kwargs: Optional[Dict] = None,
+    ):
+        # TODO: implement
+        raise NotImplementedError
+
+    def subscribe_to_trade_updates(
+        self, func: Callable, fn_kwargs: Optional[Dict] = None,
+    ):
+        # TODO: implement
+        raise NotImplementedError
+
+    def subscribe_to_price_updates(
+        self,
+        contract: AContract,
+        func: Callable,
+        fn_kwargs: Optional[Dict] = None,
+        price_type: PriceType = PriceType.MARKET,
+    ):
+        # TODO: implement
+        raise NotImplementedError
+
+    def get_position(self, contract: AContract, *args, **kwargs) -> float:
+        symbol = contract.symbol
         position = self._positions.setdefault(symbol, 0)
         return position
 

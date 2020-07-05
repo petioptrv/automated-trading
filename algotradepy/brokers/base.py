@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from datetime import datetime
-from typing import Callable, Optional, Dict
+from datetime import datetime, timedelta
+from typing import Callable, Optional, Dict, Tuple
 
 from algotradepy.contracts import AContract, PriceType
 from algotradepy.orders import AnOrder, OrderStatus
@@ -75,14 +75,40 @@ class ABroker(ABC):
         """
         raise NotImplementedError
 
-    def subscribe_to_price_updates(
+    def subscribe_to_bars(
+        self,
+        symbol: str,
+        bar_size: timedelta,
+        func: Callable,
+        fn_kwargs: Optional[dict] = None,
+    ):
+        """Subscribe to receiving historical bar data.
+
+        The bars are fed back as pandas.Series objects.
+
+        Parameters
+        ----------
+        symbol : str
+            The symbol for which to request historical data.
+        bar_size : timedelta
+            The bar size to request.
+        func : Callable
+            The function to which to feed the bars.
+        fn_kwargs : Dict
+            Keyword arguments to feed to the callback function along with the
+            bars.
+        """
+        # TODO: use contract
+        raise NotImplementedError
+
+    def subscribe_to_tick_data(
         self,
         contract: AContract,
         func: Callable,
         fn_kwargs: Optional[Dict] = None,
         price_type: PriceType = PriceType.MARKET,
     ):
-        """Subscribe to price updates.
+        """Subscribe to tick updates.
 
         Parameters
         ----------
@@ -99,6 +125,37 @@ class ABroker(ABC):
         """
         raise NotImplementedError
 
+    def cancel_tick_data(self, contract: AContract, func: Callable):
+        """Cancel tick updates.
+
+        Parameters
+        ----------
+        contract : AContract
+            The contract definition for which to cancel tick updates.
+        func : Callable
+            The function for which to cancel tick updates.
+        """
+        raise NotImplementedError
+
+    def place_order(
+        self, contract: AContract, order: AnOrder, *args, **kwargs
+    ) -> Tuple[bool, int]:
+        """Place an order with specified details.
+
+        Parameters
+        ----------
+        contract : AContract
+            The contract definition for the order.
+        order : AnOrder
+            The remaining details of the order definition.
+        Returns
+        -------
+        tuple of bool and int
+            The tuple indicates if the order has been successfully placed,
+            whereas the int is the associated order-id.
+        """
+        raise NotImplementedError
+
     def get_position(self, contract: AContract, *args, **kwargs) -> float:
         """Request the currently held position for a given symbol.
 
@@ -110,5 +167,15 @@ class ABroker(ABC):
         -------
         float
             The current position for the specified symbol.
+        """
+        raise NotImplementedError
+
+    def get_transaction_fee(self) -> float:
+        """Request the broker transaction cost.
+
+        Returns
+        -------
+        float
+            The cost per transaction.
         """
         raise NotImplementedError

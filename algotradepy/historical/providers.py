@@ -75,11 +75,13 @@ class YahooProvider(AProvider):
         symbol: str,
         start_date: date,
         end_date: date,
-        bar_size: timedelta,
+        bar_size: Optional[timedelta] = None,
         **kwargs,
     ) -> pd.DataFrame:
         import pandas_datareader as pdr
         import yfinance as yf
+
+        self._validate_bar_size(bar_size=bar_size)
 
         yf.pdr_override()
 
@@ -98,6 +100,13 @@ class YahooProvider(AProvider):
             data = data.loc[start_date:end_date]
 
         return data
+
+    @staticmethod
+    def _validate_bar_size(bar_size: Optional[timedelta]):
+        if bar_size == timedelta(0):
+            raise ValueError(
+                f"{YahooProvider.__name__} cannot provide tick data."
+            )
 
     @staticmethod
     def _get_interval_str(interval: timedelta) -> str:
@@ -175,6 +184,8 @@ class IEXProvider(AProvider):
         bar_size: timedelta,
         **kwargs,
     ):
+        self._validate_bar_size(bar_size=bar_size)
+
         params = {"token": self._api_token}
 
         if is_daily(bar_size=bar_size):
@@ -209,6 +220,13 @@ class IEXProvider(AProvider):
                 data = self._format_intraday_data(data=data)
 
         return data
+
+    @staticmethod
+    def _validate_bar_size(bar_size: timedelta):
+        if bar_size == timedelta(0):
+            raise ValueError(
+                f"{IEXProvider.__name__} cannot provide tick data."
+            )
 
     def _format_daily_data(self, data: pd.DataFrame):
         data["datetime"] = pd.to_datetime(data["date"])

@@ -9,8 +9,9 @@ from algotradepy.brokers.sim_broker import (
     SimulationClock,
     SimulationEndException,
 )
-from algotradepy.contracts import StockContract
+from algotradepy.contracts import StockContract, PriceType
 from algotradepy.historical.loaders import HistoricalRetriever
+from algotradepy.orders import MarketOrder, OrderAction
 from tests.conftest import TEST_DATA_DIR
 
 
@@ -193,8 +194,11 @@ def test_simulation_broker_buy(sim_broker_15m, spy_stock_contract):
 
     assert broker.get_position(contract=spy_stock_contract) == 0
 
+    contract = StockContract(symbol="SPY")
+    order = MarketOrder(action=OrderAction.BUY, quantity=1)
+
     broker._clock.tick()  # TODO: remove use of implementation details
-    broker.buy(symbol="SPY", n_shares=1)
+    broker.place_order(contract=contract, order=order)
 
     spy_2020_4_6_9_45_open = 257.78
 
@@ -207,8 +211,11 @@ def test_simulation_broker_sell(sim_broker_15m):
 
     assert broker.get_position(contract=spy_stock_contract) == 0
 
+    contract = StockContract(symbol="SPY")
+    order = MarketOrder(action=OrderAction.SELL, quantity=1)
+
     broker._clock.tick()  # TODO: remove use of implementation details
-    broker.sell(symbol="SPY", n_shares=1)
+    broker.place_order(contract=contract, order=order)
 
     spy_2020_4_6_9_30_close = 257.77
 
@@ -274,3 +281,137 @@ def test_simulation_broker_register_daily(sim_broker_15m):
     )
     sim_broker_15m.run_sim()
     checker.assert_all_received()
+
+
+def test_simulation_broker_register_tick_resolution_fail(
+    sim_broker_15m, spy_stock_contract,
+):
+    with pytest.raises(ValueError):
+        sim_broker_15m.subscribe_to_tick_data(
+            contract=spy_stock_contract, func=lambda x: None,
+        )
+
+
+@pytest.fixture
+def sim_broker_1s():
+    broker = SimulationBroker(
+        starting_funds=1_000,
+        transaction_cost=1,
+        hist_retriever=HistoricalRetriever(hist_data_dir=TEST_DATA_DIR),
+        start_date=date(2020, 6, 17),
+        end_date=date(2020, 6, 17),
+        simulation_time_step=timedelta(seconds=1),
+    )
+    return broker
+
+
+def test_simulation_broker_register_tick_single_symbol(
+    sim_broker_1s, spy_stock_contract,
+):
+    mkt_prices = []
+    ask_prices = []
+    bid_prices = []
+
+    def mkt_receiver(contract, price):
+        nonlocal mkt_prices
+        mkt_prices.append(price)
+
+    def ask_receiver(contract, price):
+        nonlocal ask_prices
+        ask_prices.append(price)
+
+    def bid_receiver(contract, price):
+        nonlocal bid_prices
+        bid_prices.append(price)
+
+    sim_broker_1s.subscribe_to_tick_data(
+        contract=spy_stock_contract, func=mkt_receiver,
+    )
+    sim_broker_1s.subscribe_to_tick_data(
+        contract=spy_stock_contract,
+        func=ask_receiver,
+        price_type=PriceType.ASK,
+    )
+    sim_broker_1s.subscribe_to_tick_data(
+        contract=spy_stock_contract,
+        func=bid_receiver,
+        price_type=PriceType.BID,
+    )
+
+    sim_broker_1s.run_sim(step_count=3)
+
+    np.testing.assert_equal(mkt_prices, [409.99, 410.385])
+    np.testing.assert_equal(ask_prices, [413.53, 411.52])
+    np.testing.assert_equal(bid_prices, [406.45, 409.25])
+
+
+@pytest.fixture()
+def schw_stock_contract():
+    contract = StockContract(symbol="SCHW")
+    return contract
+
+
+def test_simulation_broker_register_tick_multi_symbol(
+    sim_broker_1s, spy_stock_contract, schw_stock_contract,
+):
+    spy_ask = []
+    schw_ask = []
+
+    def spy_receiver(_, price):
+        nonlocal spy_ask
+        spy_ask.append(price)
+
+    def schw_receiver(_, price):
+        nonlocal schw_ask
+        schw_ask.append(price)
+
+    sim_broker_1s.subscribe_to_tick_data(
+        contract=spy_stock_contract,
+        func=spy_receiver,
+        price_type=PriceType.ASK,
+    )
+    sim_broker_1s.subscribe_to_tick_data(
+        contract=schw_stock_contract,
+        func=schw_receiver,
+        price_type=PriceType.ASK,
+    )
+
+    sim_broker_1s.run_sim(step_count=3)
+
+    np.testing.assert_equal(spy_ask, [413.53, 411.52])
+    np.testing.assert_equal(schw_ask, [37.442, 37.442])
+
+
+def test_cancel_tick_data(
+    sim_broker_1s, spy_stock_contract, schw_stock_contract,
+):
+    spy_ask = []
+    schw_ask = []
+
+    def spy_receiver(_, price):
+        nonlocal spy_ask
+        spy_ask.append(price)
+
+    def schw_receiver(_, price):
+        nonlocal schw_ask
+        schw_ask.append(price)
+
+    sim_broker_1s.subscribe_to_tick_data(
+        contract=spy_stock_contract,
+        func=spy_receiver,
+        price_type=PriceType.ASK,
+    )
+    sim_broker_1s.subscribe_to_tick_data(
+        contract=schw_stock_contract,
+        func=schw_receiver,
+        price_type=PriceType.ASK,
+    )
+
+    sim_broker_1s.run_sim(step_count=2)
+    sim_broker_1s.cancel_tick_data(
+        contract=spy_stock_contract, func=spy_receiver,
+    )
+    sim_broker_1s.run_sim(step_count=1)
+
+    np.testing.assert_equal(spy_ask, [413.53])
+    np.testing.assert_equal(schw_ask, [37.442, 37.442])

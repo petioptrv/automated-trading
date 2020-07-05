@@ -120,8 +120,8 @@ class HistoricalRetriever:
         self,
         symbol: str,
         bar_size: timedelta,
-        start_date: Optional[date],
-        end_date: Optional[date],
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
         cache_only: bool = False,
     ) -> pd.DataFrame:
         """Retrieves the historical data.
@@ -134,11 +134,11 @@ class HistoricalRetriever:
         ----------
         symbol : str
         bar_size : datetime.timedelta
-        start_date : datetime.date
-        end_date : datetime.date
+        start_date : datetime.date, optional, default None
+        end_date : datetime.date, optional, default None
             If the end date is set to today's date, it will be adjusted to
             yesterday's date to avoid storing partial historical data.
-        cache_only : bool
+        cache_only : bool, default False
             Prevents data-download on cache-miss.
 
         Returns
@@ -211,6 +211,7 @@ class HistoricalRetriever:
         end_date: date,
         bar_size: timedelta,
     ):
+        print(f"{start_date} - {end_date}")
         data = self._provider.download_data(
             symbol=symbol,
             start_date=start_date,

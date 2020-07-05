@@ -16,6 +16,13 @@ class ReprAble:
 
 
 class Comparable:
+    def __hash__(self):
+        public_args = [
+            arg for arg in self.__dir__() if not arg.startswith("_")
+        ]
+        h = hash(tuple(public_args))
+        return h
+
     def __eq__(self, other):
         equal = True
 

@@ -195,7 +195,7 @@ class IBBroker(ABroker):
             target_fn=self._ib_conn.orderStatus, callback=order_status_filter,
         )
 
-    def subscribe_to_price_updates(
+    def subscribe_to_tick_data(
         self,
         contract: AContract,
         func: Callable,
@@ -254,10 +254,7 @@ class IBBroker(ABroker):
             mktDataOptions=[],
         )
 
-    # ------------------------ TODO: add to ABroker ----------------------------
-
-    def cancel_price_updates(self, contract: AContract, func: Callable):
-        # TODO: document
+    def cancel_tick_data(self, contract: AContract, func: Callable):
         # TODO: test
         if self._market_data_type_set is None:
             raise RuntimeError("No price subscriptions were requested.")
@@ -279,8 +276,14 @@ class IBBroker(ABroker):
                 f" function {func}."
             )
 
+    # ------------------------ TODO: add to ABroker ----------------------------
+
     def place_order(
-        self, contract: AContract, order: AnOrder, await_confirm: bool = False,
+        self,
+        contract: AContract,
+        order: AnOrder,
+        *args,
+        await_confirm: bool = False,
     ) -> Tuple[bool, int]:
         """Place an order with specified details.
 

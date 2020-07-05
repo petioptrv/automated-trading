@@ -1,6 +1,6 @@
 from datetime import timedelta, date, time, datetime
 import time as real_time
-from typing import Callable, Optional, Dict
+from typing import Callable, Optional, Dict, Tuple
 
 import pandas as pd
 
@@ -8,6 +8,7 @@ from algotradepy.brokers.base import ABroker
 from algotradepy.contracts import AContract, PriceType
 from algotradepy.historical.hist_utils import is_daily
 from algotradepy.historical.loaders import HistoricalRetriever
+from algotradepy.orders import AnOrder, OrderAction
 from algotradepy.time_utils import (
     generate_trading_schedule,
     get_next_trading_date,
@@ -156,6 +157,7 @@ class SimulationClock:
 class SimulationBroker(ABroker):
     """
     TODO: handle trading-halts.
+    TODO: convert to timezone-aware time stamps (GMT)
     """
 
     def __init__(
@@ -176,17 +178,19 @@ class SimulationBroker(ABroker):
             simulation_time_step=simulation_time_step,
             real_time_per_tick=real_time_per_tick,
         )
-        if hist_retriever is None:
-            hist_retriever = HistoricalRetriever()
         self._cash = starting_funds
         self._positions = {}
         if starting_positions is not None:
             self._positions.update(**starting_positions)
+        if hist_retriever is None:
+            hist_retriever = HistoricalRetriever()
         self._hist_retriever = hist_retriever
         self._abs_fee = transaction_cost
         self._bars_callback_table = {}
+        self._tick_callback_table = {}
         self._local_cache = {}
         self._hist_cache_only = None
+        self._valid_id = 0
 
     @property
     def acc_cash(self) -> float:
@@ -203,22 +207,6 @@ class SimulationBroker(ABroker):
         func: Callable,
         fn_kwargs: Optional[dict] = None,
     ):
-        """Subscribe to receiving historical bar data.
-
-        The bars are fed back as pandas.Series objects.
-
-        Parameters
-        ----------
-        symbol : str
-            The symbol for which to request historical data.
-        bar_size : timedelta
-            The bar size to request.
-        func : Callable
-            The function to which to feed the bars.
-        fn_kwargs : Dict
-            Keyword arguments to feed to the callback function along with the
-            bars.
-        """
         if bar_size < self._clock.time_step:
             raise NotImplementedError(
                 f"Attempted to register for a bar-size of {bar_size} in a"
@@ -229,8 +217,10 @@ class SimulationBroker(ABroker):
         if fn_kwargs is None:
             fn_kwargs = {}
 
-        callbacks = self._bars_callback_table.setdefault(bar_size, {})
-        callbacks[func] = {"symbol": symbol, "kwargs": fn_kwargs}
+        # {bar_size: {symbol: {func: fn_kwargs}}}
+        contract_dict = self._bars_callback_table.setdefault(bar_size, {})
+        callbacks = contract_dict.setdefault(symbol, {})
+        callbacks[func] = fn_kwargs
 
     def subscribe_to_new_trades(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
@@ -244,96 +234,145 @@ class SimulationBroker(ABroker):
         # TODO: implement
         raise NotImplementedError
 
-    def subscribe_to_price_updates(
+    def subscribe_to_tick_data(
         self,
         contract: AContract,
         func: Callable,
         fn_kwargs: Optional[Dict] = None,
         price_type: PriceType = PriceType.MARKET,
     ):
-        # TODO: implement
-        raise NotImplementedError
+        if self._clock.time_step != timedelta(seconds=1):
+            raise ValueError(
+                f"Can only simulate tick data subscription with a clock"
+                f" time-step of 1s. Current time-step: {self._clock.time_step}."
+            )
+
+        if fn_kwargs is None:
+            fn_kwargs = {}
+
+        # {contract: {func: {"fn_kwargs": fn_kwargs, "price_type": price_type}}}
+        callbacks = self._tick_callback_table.setdefault(contract, {})
+        callbacks[func] = {"fn_kwargs": fn_kwargs, "price_type": price_type}
+
+    def cancel_tick_data(self, contract: AContract, func: Callable):
+        if contract in self._tick_callback_table:
+            callbacks = self._tick_callback_table[contract]
+            if func in callbacks:
+                del callbacks[func]
+            if len(callbacks) == 0:
+                del self._tick_callback_table[contract]
+
+    def place_order(
+        self, contract: AContract, order: AnOrder, *args, **kwargs
+    ) -> Tuple[bool, int]:
+        n_shares = order.quantity
+        price = self._get_current_price(symbol=contract.symbol)
+
+        if order.action == OrderAction.BUY:
+            self._cash -= n_shares * price + self.get_transaction_fee()
+        else:  # OrderAction.SELL
+            n_shares = -n_shares
+            self._cash += n_shares * price + self.get_transaction_fee()
+
+        self._add_to_position(symbol=contract.symbol, n_shares=n_shares)
+        order_id = self._get_increment_valid_id()
+
+        return True, order_id
 
     def get_position(self, contract: AContract, *args, **kwargs) -> float:
         symbol = contract.symbol
         position = self._positions.setdefault(symbol, 0)
         return position
 
-    def buy(self, symbol: str, n_shares: float, *args, **kwargs) -> bool:
-        """Submit a buy order.
-
-        Parameters
-        ----------
-        symbol : str
-            The symbol for which to submit a buy order.
-        n_shares : float
-            The number of shares to buy.
-        """
-        assert n_shares > 0
-        self._add_to_position(symbol=symbol, n_shares=n_shares)
-        price = self._get_current_price(symbol=symbol)
-        self._cash -= n_shares * price + self.get_transaction_fee()
-        return True
-
-    def sell(self, symbol: str, n_shares: float, *args, **kwargs) -> bool:
-        """Submit a sell order.
-
-        Parameters
-        ----------
-        symbol :
-            The symbol for which to submit a sell order.
-        n_shares : float
-            The number of shares to sell
-        """
-        assert n_shares > 0
-        self._add_to_position(symbol=symbol, n_shares=-n_shares)
-        price = self._get_current_price(symbol=symbol)
-        self._cash += n_shares * price - self.get_transaction_fee()
-        return True
-
     def get_transaction_fee(self) -> float:
-        """Request the broker transaction cost.
-
-        Returns
-        -------
-        float
-            The cost per transaction.
-        """
         return self._abs_fee
 
-    def run_sim(self, cache_only: bool = True):
+    def run_sim(
+        self, step_count: Optional[int] = None, cache_only: bool = True,
+    ):
         self._hist_cache_only = cache_only
+        i = 0
 
         while True:
             try:
-                self._clock.tick()  # advance the time by one candle
-                self._maybe_update_subscribers()  # deliver the bar
+                self._clock.tick()
+                self._update_tick_subscribers()
+                self._maybe_update_bar_subscribers()
             except SimulationEndException:
                 break
 
-    def _maybe_update_subscribers(self):
+            i += 1
+            if i == step_count:
+                break
+
+    def _get_increment_valid_id(self) -> int:
+        id = self._valid_id
+        self._valid_id += 1
+        return id
+
+    def _update_tick_subscribers(self):
+        data = pd.DataFrame()
+
+        for contract, _ in self._tick_callback_table.items():
+            symbol_data = self._get_tick_data(
+                contract=contract, bar_size=self._clock.time_step,
+            )
+            data = data.append(symbol_data)
+
+        data = data.sort_index(axis=0, level=1)
+
+        for idx, row in data.iterrows():
+            contract, dt_ = idx
+            callbacks = self._tick_callback_table[contract]
+
+            for func, fn_dict in callbacks.items():
+                if fn_dict["price_type"] == PriceType.ASK:
+                    price = row["ask"]
+                elif fn_dict["price_type"] == PriceType.BID:
+                    price = row["bid"]
+                else:
+                    price = (row["ask"] + row["bid"]) / 2
+                func(contract, price, **fn_dict["fn_kwargs"])
+
+    def _get_tick_data(
+        self, contract: AContract, bar_size: timedelta,
+    ) -> pd.DataFrame:
+        curr_dt = self._clock.datetime
+        next_dt = curr_dt + timedelta(seconds=1)
+        symbol_data = self._get_data(
+            symbol=contract.symbol, bar_size=timedelta(0),
+        )
+        symbol_data = symbol_data.loc[curr_dt:next_dt]
+        ml_index = pd.MultiIndex.from_product([[contract], symbol_data.index])
+        symbol_data.index = ml_index
+        return symbol_data
+
+    def _maybe_update_bar_subscribers(self):
         step_is_daily = is_daily(bar_size=self._clock.time_step)
         if step_is_daily:
             bar_size = self._clock.time_step
-            callbacks = self._bars_callback_table[bar_size]
-            self._update_subscribers(bar_size=bar_size, callbacks=callbacks)
+            contract_dict = self._bars_callback_table[bar_size]
+            self._update_bar_subscribers(
+                bar_size=bar_size, contract_dict=contract_dict,
+            )
         else:
-            for bar_size, callbacks in self._bars_callback_table.items():
+            for bar_size, contract_dict in self._bars_callback_table.items():
                 sub_is_daily = is_daily(bar_size=bar_size)
                 since_epoch = self._clock.datetime.timestamp()
                 if (sub_is_daily and self._clock.end_of_day) or (
                     not sub_is_daily and since_epoch % bar_size.seconds == 0
                 ):
-                    self._update_subscribers(
-                        bar_size=bar_size, callbacks=callbacks
+                    self._update_bar_subscribers(
+                        bar_size=bar_size, contract_dict=contract_dict
                     )
 
-    def _update_subscribers(self, bar_size: timedelta, callbacks: dict):
-        for func, params in callbacks.items():
-            symbol = params["symbol"]
-            bar = self._get_latest_bar(symbol=symbol, bar_size=bar_size,)
-            kwargs = params["kwargs"]
-            func(bar, **kwargs)
+    def _update_bar_subscribers(
+        self, bar_size: timedelta, contract_dict: dict
+    ):
+        for symbol, callbacks in contract_dict.items():
+            bar = self._get_latest_time_entry(symbol=symbol, bar_size=bar_size)
+            for func, fn_kwargs in callbacks.items():
+                func(bar, **fn_kwargs)
 
     def _add_to_position(self, symbol: str, n_shares: float):
         symbol = symbol.upper()
@@ -341,13 +380,16 @@ class SimulationBroker(ABroker):
         self._positions[symbol] = curr_pos + n_shares
 
     def _get_current_price(self, symbol: str) -> float:
+        # TODO: use 1s aggregation of ticks, if available
         bar = self._get_next_bar(
             symbol=symbol, bar_size=self._clock.time_step,
         )
         price = bar["open"]
         return price
 
-    def _get_latest_bar(self, symbol: str, bar_size: timedelta) -> pd.Series:
+    def _get_latest_time_entry(
+        self, symbol: str, bar_size: timedelta
+    ) -> pd.Series:
         bar_data = self._get_data(symbol=symbol, bar_size=bar_size,)
         curr_dt = self._clock.datetime
         if is_daily(bar_size=bar_size):
@@ -370,6 +412,7 @@ class SimulationBroker(ABroker):
         return bar
 
     def _get_data(self, symbol: str, bar_size: timedelta) -> pd.DataFrame:
+        # TODO: change to using a contract
         symbol_data = self._local_cache.get(symbol)
         if symbol_data is None:
             symbol_data = {}

@@ -1,4 +1,5 @@
 from datetime import timedelta, date
+from typing import Optional
 
 from algotradepy.path_utils import PROJECT_DIR
 from algotradepy.time_utils import generate_trading_days
@@ -13,8 +14,10 @@ def is_daily(bar_size: timedelta):
     return daily
 
 
-def bar_size_to_str(bar_size: timedelta):
-    if bar_size == timedelta(seconds=1):
+def bar_size_to_str(bar_size: Optional[timedelta]):
+    if bar_size == timedelta(0):
+        bar_size_str = "tick"
+    elif bar_size == timedelta(seconds=1):
         bar_size_str = "1 sec"
     elif bar_size < timedelta(minutes=1):
         bar_size_str = f"{bar_size.seconds} secs"

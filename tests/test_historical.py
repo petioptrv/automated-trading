@@ -47,6 +47,24 @@ def validate_data_range(
             )
 
 
+def test_retriever_cached_tick():
+    start_date = date(2020, 6, 17)
+    end_date = date(2020, 6, 19)
+
+    retriever = HistoricalRetriever(hist_data_dir=TEST_DATA_DIR)
+    data = retriever.retrieve_bar_data(
+        symbol="SCHW",
+        start_date=start_date,
+        end_date=end_date,
+        bar_size=timedelta(0),
+        cache_only=True,
+    )
+
+    assert len(data) != 0
+
+    validate_data_range(data=data, start_date=start_date, end_date=end_date)
+
+
 def test_retriever_cached_daily():
     start_date = date(2020, 4, 1)
     end_date = date(2020, 4, 2)

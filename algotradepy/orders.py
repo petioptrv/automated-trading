@@ -108,3 +108,30 @@ class LimitOrder(AnOrder):
     @property
     def limit_price(self) -> float:
         return self._limit_price
+
+
+class TrailingStop(AnOrder):
+    # TODO: test
+    def __init__(
+        self,
+        action: OrderAction,
+        quantity: float,
+        stop_price: Optional[float] = None,
+        trailing_percent: Optional[float] = None,
+        order_id: Optional[int] = None,
+    ):
+        assert stop_price is not None or trailing_percent is not None
+
+        super().__init__(
+            order_id=order_id, action=action, quantity=quantity,
+        )
+        self._stop_price = stop_price
+        self._trailing_percent = trailing_percent
+
+    @property
+    def stop_price(self):
+        return self._stop_price
+
+    @property
+    def trailing_percent(self):
+        return self._trailing_percent

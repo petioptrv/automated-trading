@@ -8,7 +8,7 @@ from algotradepy.brokers.base import ABroker
 from algotradepy.contracts import AContract, PriceType
 from algotradepy.historical.hist_utils import is_daily
 from algotradepy.historical.loaders import HistoricalRetriever
-from algotradepy.orders import AnOrder, OrderAction
+from algotradepy.orders import AnOrder, OrderAction, MarketOrder
 from algotradepy.time_utils import (
     generate_trading_schedule,
     get_next_trading_date,
@@ -191,6 +191,7 @@ class SimulationBroker(ABroker):
         self._local_cache = {}
         self._hist_cache_only = None
         self._valid_id = 0
+        self.limit_orders = []
 
     @property
     def acc_cash(self) -> float:
@@ -265,17 +266,20 @@ class SimulationBroker(ABroker):
     def place_order(
         self, contract: AContract, order: AnOrder, *args, **kwargs
     ) -> Tuple[bool, int]:
-        n_shares = order.quantity
-        price = self._get_current_price(symbol=contract.symbol)
+        if isinstance(order, MarketOrder):
+            n_shares = order.quantity
+            price = self._get_current_price(symbol=contract.symbol)
 
-        if order.action == OrderAction.BUY:
-            self._cash -= n_shares * price + self.get_transaction_fee()
-        else:  # OrderAction.SELL
-            n_shares = -n_shares
-            self._cash += n_shares * price + self.get_transaction_fee()
+            if order.action == OrderAction.BUY:
+                self._cash -= n_shares * price + self.get_transaction_fee()
+            else:  # OrderAction.SELL
+                n_shares = -n_shares
+                self._cash += n_shares * price + self.get_transaction_fee()
 
-        self._add_to_position(symbol=contract.symbol, n_shares=n_shares)
-        order_id = self._get_increment_valid_id()
+            self._add_to_position(symbol=contract.symbol, n_shares=n_shares)
+            order_id = self._get_increment_valid_id()
+        else:
+            self.limit_orders.append((contract, order))
 
         return True, order_id
 

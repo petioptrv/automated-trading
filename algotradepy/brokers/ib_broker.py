@@ -32,6 +32,7 @@ from algotradepy.orders import (
     OrderStatus,
     OrderAction,
     OrderState,
+    TrailingStop,
 )
 
 
@@ -579,6 +580,12 @@ class IBBroker(ABroker):
         elif isinstance(order, LimitOrder):
             ib_order.orderType = "LMT"
             ib_order.lmtPrice = round(order.limit_price, 2)
+        elif isinstance(order, TrailingStop):
+            ib_order.orderType = "TRAIL"
+            if order.stop_price is not None:
+                ib_order.auxPrice = order.stop_price
+            elif order.trailing_percent is not None:
+                ib_order.trailingPercent = order.trailing_percent
         else:
             raise TypeError(f"Unknown type of order {type(order)}.")
 

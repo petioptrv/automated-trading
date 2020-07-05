@@ -415,3 +415,38 @@ def test_cancel_tick_data(
 
     np.testing.assert_equal(spy_ask, [413.53])
     np.testing.assert_equal(schw_ask, [37.442, 37.442])
+
+
+def test_tick_data_delivery_order(
+    sim_broker_1s, spy_stock_contract, schw_stock_contract,
+):
+    spy_ask = []
+    schw_ask = []
+
+    def spy_receiver(_, price):
+        nonlocal spy_ask, schw_ask
+        spy_ask.append(price)
+        if price == 406.9:
+            assert abs(len(spy_ask) - len(schw_ask)) == 0
+        elif price == 407.57:
+            assert abs(len(spy_ask) - len(schw_ask)) == 1
+
+    def schw_receiver(_, price):
+        nonlocal schw_ask
+        schw_ask.append(price)
+
+    sim_broker_1s.subscribe_to_tick_data(
+        contract=spy_stock_contract,
+        func=spy_receiver,
+        price_type=PriceType.ASK,
+    )
+    sim_broker_1s.subscribe_to_tick_data(
+        contract=schw_stock_contract,
+        func=schw_receiver,
+        price_type=PriceType.ASK,
+    )
+
+    sim_broker_1s.run_sim(step_count=8)
+
+    assert len(spy_ask) == 17
+    assert len(schw_ask) == 18

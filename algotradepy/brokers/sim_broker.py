@@ -251,6 +251,7 @@ class SimulationBroker(ABroker):
     def subscribe_to_new_trades(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
+        # TODO: test
         if fn_kwargs is None:
             fn_kwargs = {}
         self._new_trade_subscribers.append((func, fn_kwargs))
@@ -258,6 +259,7 @@ class SimulationBroker(ABroker):
     def subscribe_to_trade_updates(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
+        # TODO: test
         if fn_kwargs is None:
             fn_kwargs = {}
         self._trade_updates_subscribers.append((func, fn_kwargs))
@@ -269,6 +271,7 @@ class SimulationBroker(ABroker):
         fn_kwargs: Optional[Dict] = None,
         price_type: PriceType = PriceType.MARKET,
     ):
+        # TODO: test
         if self._clock.time_step != timedelta(seconds=1):
             raise ValueError(
                 f"Can only simulate tick data subscription with a clock"
@@ -293,6 +296,7 @@ class SimulationBroker(ABroker):
     def place_order(
         self, contract: AContract, order: AnOrder, *args, **kwargs
     ) -> Tuple[bool, int]:
+        # TODO: test for Limit and Stop Loss Orders
         trade_id = self._get_increment_valid_id()
         self._placed_trades[trade_id] = [contract, order, 0]
 
@@ -321,6 +325,7 @@ class SimulationBroker(ABroker):
     def run_sim(
         self, step_count: Optional[int] = None, cache_only: bool = True,
     ):
+        # TODO: test step_count
         self._hist_cache_only = cache_only
         i = 0
 
@@ -342,6 +347,7 @@ class SimulationBroker(ABroker):
         price: Optional[float] = None,
         n_shares: Optional[float] = None,
     ):
+        # TODO: test
         self._execute_trade(
             trade_id=trade_id, price=price, n_shares=n_shares,
         )

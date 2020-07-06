@@ -111,6 +111,8 @@ class IBBroker(ABroker):
         if self._positions is not None:
             self._ib_conn.cancelPositions()
 
+        self._cancel_all_price_subscriptions()
+
         self._ib_conn.managed_disconnect()
 
     @property
@@ -264,12 +266,8 @@ class IBBroker(ABroker):
         found = False
         for req_id, sub_dict in self._price_subscriptions.items():
             if contract == sub_dict["contract"] and func == sub_dict["func"]:
-                self._ib_conn.cancelMktData(reqId=req_id)
-                self._ib_conn.unsubscribe(
-                    target_fn=self._ib_conn.tickPrice, callback=func,
-                )
-                del self._price_subscriptions[req_id]
                 found = True
+                self._cancel_price_subscription(req_id=req_id)
                 break
 
         if not found:
@@ -703,3 +701,17 @@ class IBBroker(ABroker):
         res = queue.get()
 
         return res
+
+    def _cancel_all_price_subscriptions(self):
+        req_ids = list(self._price_subscriptions.keys())
+        for req_id in req_ids:
+            self._cancel_price_subscription(req_id=req_id)
+
+    def _cancel_price_subscription(self, req_id: int):
+        sub_dict = self._price_subscriptions[req_id]
+        func = sub_dict["func"]
+        self._ib_conn.cancelMktData(reqId=req_id)
+        self._ib_conn.unsubscribe(
+            target_fn=self._ib_conn.tickPrice, callback=func,
+        )
+        del self._price_subscriptions[req_id]

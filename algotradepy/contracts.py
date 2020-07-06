@@ -16,15 +16,20 @@ class Exchange(Enum):
     # North America
     NYSE = "NYSE"
     NASDAQ = "NASDAQ"
+    AMEX = "AMEX"
+    ARCA = "ARCA"
     TSE = "TSE"
     VENTURE = "VENTURE"
 
     # Europe
     FWB = "FWB"
-    IBIS = "IBIS"  # might be XETRA
+    IBIS = "IBIS"
     VSE = "VSE"
     LSE = "LSE"
     BATEUK = "BATEUK"
+    ENEXT_BE = "ENEXT.BE"
+    SBF = "SBF"
+    AEB = "AEB"
 
     # Asia/Pacific
     SEHK = "SEHK"

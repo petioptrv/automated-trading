@@ -1,6 +1,7 @@
 from datetime import timedelta, date, time, datetime
 import time as real_time
-from typing import Callable, Optional, Dict, Tuple
+from typing import Callable, Optional, Dict, Tuple, List
+from itertools import repeat
 
 import pandas as pd
 
@@ -8,7 +9,14 @@ from algotradepy.brokers.base import ABroker
 from algotradepy.contracts import AContract, PriceType
 from algotradepy.historical.hist_utils import is_daily
 from algotradepy.historical.loaders import HistoricalRetriever
-from algotradepy.orders import AnOrder, OrderAction, MarketOrder
+from algotradepy.orders import (
+    AnOrder,
+    LimitOrder,
+    OrderAction,
+    MarketOrder,
+    OrderState,
+    OrderStatus,
+)
 from algotradepy.time_utils import (
     generate_trading_schedule,
     get_next_trading_date,
@@ -157,7 +165,6 @@ class SimulationClock:
 class SimulationBroker(ABroker):
     """
     TODO: handle trading-halts.
-    TODO: convert to timezone-aware time stamps (GMT)
     """
 
     def __init__(
@@ -191,7 +198,9 @@ class SimulationBroker(ABroker):
         self._local_cache = {}
         self._hist_cache_only = None
         self._valid_id = 0
-        self.limit_orders = []
+        self._new_trade_subscribers = []
+        self._trade_updates_subscribers = []
+        self._placed_trades = {}  # {id: [contract, order, filled]}
 
     @property
     def acc_cash(self) -> float:
@@ -200,6 +209,22 @@ class SimulationBroker(ABroker):
     @property
     def datetime(self) -> datetime:
         return self._clock.datetime
+
+    @property
+    def trades(self) -> List[Tuple[int, AContract, AnOrder]]:
+        """Mostly used for testing.
+
+        Returns
+        -------
+        trades : list of tuples of int, AContract and AnOrder pairs
+            The currently active trades.
+        """
+        trades = []
+
+        for trade_id, trade_tuple in self._placed_trades.items():
+            trades.append((trade_id, trade_tuple[0], trade_tuple[1]))
+
+        return trades
 
     def subscribe_to_bars(
         self,
@@ -226,14 +251,16 @@ class SimulationBroker(ABroker):
     def subscribe_to_new_trades(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
-        # TODO: implement
-        raise NotImplementedError
+        if fn_kwargs is None:
+            fn_kwargs = {}
+        self._new_trade_subscribers.append((func, fn_kwargs))
 
     def subscribe_to_trade_updates(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
-        # TODO: implement
-        raise NotImplementedError
+        if fn_kwargs is None:
+            fn_kwargs = {}
+        self._trade_updates_subscribers.append((func, fn_kwargs))
 
     def subscribe_to_tick_data(
         self,
@@ -266,22 +293,22 @@ class SimulationBroker(ABroker):
     def place_order(
         self, contract: AContract, order: AnOrder, *args, **kwargs
     ) -> Tuple[bool, int]:
+        trade_id = self._get_increment_valid_id()
+        self._placed_trades[trade_id] = [contract, order, 0]
+
         if isinstance(order, MarketOrder):
-            n_shares = order.quantity
-            price = self._get_current_price(symbol=contract.symbol)
+            # TODO: This should be smarter... What if liquidity is low?
+            self._execute_trade(trade_id=trade_id)
 
-            if order.action == OrderAction.BUY:
-                self._cash -= n_shares * price + self.get_transaction_fee()
-            else:  # OrderAction.SELL
-                n_shares = -n_shares
-                self._cash += n_shares * price + self.get_transaction_fee()
+        self._update_trade_updates_subscribers(
+            trade_id=trade_id, state=OrderState.SUBMITTED,
+        )
 
-            self._add_to_position(symbol=contract.symbol, n_shares=n_shares)
-            order_id = self._get_increment_valid_id()
-        else:
-            self.limit_orders.append((contract, order))
+        # update trade placed subscribers
+        for func, fn_kwargs in self._new_trade_subscribers:
+            func(contract, order, **fn_kwargs)
 
-        return True, order_id
+        return True, trade_id
 
     def get_position(self, contract: AContract, *args, **kwargs) -> float:
         symbol = contract.symbol
@@ -309,10 +336,20 @@ class SimulationBroker(ABroker):
             if i == step_count:
                 break
 
+    def simulate_trade_execution(
+        self,
+        trade_id: int,
+        price: Optional[float] = None,
+        n_shares: Optional[float] = None,
+    ):
+        self._execute_trade(
+            trade_id=trade_id, price=price, n_shares=n_shares,
+        )
+
     def _get_increment_valid_id(self) -> int:
-        id = self._valid_id
+        valid_id = self._valid_id
         self._valid_id += 1
-        return id
+        return valid_id
 
     def _update_tick_subscribers(self):
         data = pd.DataFrame()
@@ -378,10 +415,66 @@ class SimulationBroker(ABroker):
             for func, fn_kwargs in callbacks.items():
                 func(bar, **fn_kwargs)
 
+    def _execute_trade(
+        self,
+        trade_id: int,
+        price: Optional[float] = None,
+        n_shares: Optional[float] = None,
+    ):
+        contract, order, filled = self._placed_trades[trade_id]
+
+        if n_shares is not None:
+            assert n_shares <= order.quantity - filled
+        else:
+            n_shares = order.quantity - filled
+
+        if price is None:
+            price = self._get_current_price(symbol=contract.symbol)
+
+        if isinstance(order, LimitOrder):
+            if order.action == OrderAction.BUY:
+                assert price <= order.limit_price
+            else:
+                assert price >= order.limit_price
+
+        if order.action == OrderAction.BUY:
+            self._cash -= n_shares * price + self.get_transaction_fee()
+        else:
+            n_shares = -n_shares
+            self._cash += n_shares * price + self.get_transaction_fee()
+
+        self._add_to_position(symbol=contract.symbol, n_shares=n_shares)
+        filled += n_shares
+        self._placed_trades[trade_id][2] = filled
+        self._update_trade_updates_subscribers(
+            trade_id=trade_id, state=OrderState.FILLED, ave_fill_price=price,
+        )
+        if filled == order.quantity:
+            self._remove_trade(trade_id=trade_id)
+
     def _add_to_position(self, symbol: str, n_shares: float):
         symbol = symbol.upper()
         curr_pos = self._positions.setdefault(symbol, 0)
         self._positions[symbol] = curr_pos + n_shares
+
+    def _remove_trade(self, trade_id: int):
+        del self._placed_trades[trade_id]
+
+    def _update_trade_updates_subscribers(
+        self, trade_id: int, state: OrderState, ave_fill_price: float = 0
+    ):
+        _, order, filled = self._placed_trades[trade_id]
+        remaining = order.quantity - filled
+        status = OrderStatus(
+            order_id=trade_id,
+            state=state,
+            filled=filled,
+            remaining=remaining,
+            ave_fill_price=ave_fill_price,
+        )
+
+        for func, fn_kwargs in self._trade_updates_subscribers:
+            func(status, **fn_kwargs)
 
     def _get_current_price(self, symbol: str) -> float:
         # TODO: use 1s aggregation of ticks, if available

@@ -110,7 +110,7 @@ class LimitOrder(AnOrder):
         return self._limit_price
 
 
-class TrailingStop(AnOrder):
+class TrailingStopOrder(AnOrder):
     # TODO: test
     def __init__(
         self,

@@ -6,6 +6,7 @@ from threading import Lock
 from queue import Queue
 import logging
 
+from ibapi.common import UNSET_DOUBLE
 from ibapi.contract import Contract as IbContract
 from ibapi.order import Order as IbOrder
 from ibapi.account_summary_tags import AccountSummaryTags
@@ -32,7 +33,7 @@ from algotradepy.orders import (
     OrderStatus,
     OrderAction,
     OrderState,
-    TrailingStop,
+    TrailingStopOrder,
 )
 
 
@@ -559,6 +560,23 @@ class IBBroker(ABroker):
                 quantity=ib_order.totalQuantity,
                 limit_price=ib_order.lmtPrice,
             )
+        elif ib_order.orderType == "TRAIL":
+            if ib_order.trailingPercent == UNSET_DOUBLE:
+                trailing_percent = None
+            else:
+                trailing_percent = ib_order.trailingPercent
+            if ib_order.auxPrice == UNSET_DOUBLE:
+                stop_price = None
+            else:
+                stop_price = ib_order.auxPrice
+
+            order = TrailingStopOrder(
+                order_id=order_id,
+                action=order_action,
+                quantity=ib_order.totalQuantity,
+                trailing_percent=trailing_percent,
+                stop_price=stop_price,
+            )
         else:
             logging.warning(
                 f"Order type {ib_order.orderType} not understood."
@@ -580,7 +598,7 @@ class IBBroker(ABroker):
         elif isinstance(order, LimitOrder):
             ib_order.orderType = "LMT"
             ib_order.lmtPrice = round(order.limit_price, 2)
-        elif isinstance(order, TrailingStop):
+        elif isinstance(order, TrailingStopOrder):
             ib_order.orderType = "TRAIL"
             if order.stop_price is not None:
                 ib_order.auxPrice = order.stop_price

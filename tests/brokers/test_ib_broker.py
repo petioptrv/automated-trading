@@ -12,6 +12,7 @@ from algotradepy.orders import (
     LimitOrder,
     OrderAction,
     MarketOrder,
+    TrailingStopOrder,
 )
 from algotradepy.subscribable import Subscribable
 from tests.conftest import PROJECT_DIR
@@ -525,6 +526,8 @@ def test_order_cancel(master_broker):
     [
         (Exchange.NYSE, Currency.USD, "SPY", 1),
         (Exchange.NASDAQ, Currency.USD, "TSLA", 1),
+        (Exchange.AMEX, Currency.USD, "TSLA", 1),
+        (Exchange.ARCA, Currency.USD, "TSLA", 1),
         (Exchange.TSE, Currency.CAD, "AQN", 1),
         (Exchange.VENTURE, Currency.CAD, "VTI", 1),
         (Exchange.FWB, Currency.EUR, "FME", 1),
@@ -532,6 +535,9 @@ def test_order_cancel(master_broker):
         (Exchange.VSE, Currency.EUR, "SBO", 1),
         (Exchange.LSE, Currency.GBP, "BRBY", 1),
         (Exchange.BATEUK, Currency.GBP, "GENL", 1),
+        (Exchange.ENEXT_BE, Currency.EUR, "BAR", 1),
+        (Exchange.SBF, Currency.EUR, "BRE", 1),
+        (Exchange.AEB, Currency.EUR, "LQDA", 1),
         (Exchange.SEHK, Currency.HKD, "98", 1000),
         (Exchange.ASX, Currency.AUD, "CML", 1),
         (Exchange.TSEJ, Currency.JPY, "2334", 100),
@@ -540,6 +546,7 @@ def test_order_cancel(master_broker):
 def test_exchanges_and_currencies(
     exchange, currency, symbol, size, non_master_broker, master_ib_test_broker,
 ):
+    time.sleep(1)
     contract = StockContract(
         symbol=symbol, exchange=exchange, currency=currency,
     )
@@ -553,9 +560,52 @@ def test_exchanges_and_currencies(
     increment_tests_passed()
 
 
+@pytest.mark.parametrize("stop_price,stop_percent", [(30, None), (None, 10)])
+def test_trailing_stop_order(
+    stop_price, stop_percent, master_broker, spy_stock_contract,
+):
+    received_contract: AContract = None
+    received_order: AnOrder = None
+
+    def order_receiver(contract_: AContract, order_: AnOrder):
+        nonlocal received_order, received_contract
+
+        received_order = order_
+        received_contract = contract_
+
+    master_broker.subscribe_to_new_trades(func=order_receiver)
+
+    stop_order = TrailingStopOrder(
+        action=OrderAction.BUY,
+        quantity=1,
+        stop_price=stop_price,
+        trailing_percent=stop_percent,
+    )
+    _, order_id = master_broker.place_order(
+        contract=spy_stock_contract, order=stop_order, await_confirm=True,
+    )
+
+    t0 = t1 = time.time()
+    while t1 - t0 <= AWAIT_TIME_OUT and received_contract is None:
+        time.sleep(1)
+        t1 = time.time()
+
+    assert received_contract.symbol == "SPY"
+    assert isinstance(received_order, TrailingStopOrder)
+    assert received_order.action == OrderAction.BUY
+    if stop_price is not None:
+        assert received_order.stop_price == stop_price
+        assert received_order.trailing_percent is None
+    else:
+        assert received_order.stop_price is None
+        assert received_order.trailing_percent == stop_percent
+
+    master_broker.cancel_order(order_id=order_id)
+
+
 def test_log_all_tests_passed_ts():
     global tests_passed
-    assert tests_passed == 23
+    assert tests_passed == 28
 
     ts_f_path = PROJECT_DIR / "test_scripts" / "test_ib_broker_ts.log"
 

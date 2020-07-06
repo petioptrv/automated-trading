@@ -106,6 +106,11 @@ class HistoricalRetriever:
         non-cached data.
     hist_data_dir : pathlib.Path, default "../histData"
         The path to the historical data cache.
+
+    Notes
+    -----
+    - TODO: convert to timezone-aware time stamps (GMT)
+    - TODO: add exchange info
     """
 
     def __init__(

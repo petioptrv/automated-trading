@@ -60,7 +60,7 @@ class IBConnector(EWrapper, EClient, Subscribable):
     +---------------+----------------+-------------+
     | "workstation" | "paper"        | 7497        |
     +---------------+----------------+-------------+
-    | "workstation" | "live"         | todo: get   |
+    | "workstation" | "live"         | 7496        |
     +---------------+----------------+-------------+
     | "gateway"     | "paper"        | todo: get   |
     +---------------+----------------+-------------+

@@ -85,7 +85,7 @@ class IBConnector(EWrapper, EClient, Subscribable):
         elif receiver == "workstation" and trading_mode == "paper":
             self._socket_port = 7497
         elif receiver == "workstation" and trading_mode == "live":
-            self._socket_port = 7596
+            self._socket_port = 7496
         elif receiver == "gateway" and trading_mode == "paper":
             raise ValueError("Socket port not yet set.")
         elif receiver == "gateway" and trading_mode == "live":

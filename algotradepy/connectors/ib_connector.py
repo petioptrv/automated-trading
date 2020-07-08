@@ -83,7 +83,7 @@ class IBConnector(EWrapper, EClient, Subscribable):
         if socket_port is not None:
             self._socket_port = socket_port
         elif receiver == "workstation" and trading_mode == "live":
-            self._socket_port = 7596
+            self._socket_port = 7496
         elif receiver == "workstation" and trading_mode == "paper":
             self._socket_port = 7497
         elif receiver == "gateway" and trading_mode == "live":

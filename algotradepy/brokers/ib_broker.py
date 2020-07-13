@@ -1,15 +1,28 @@
-import time
 import calendar
 from datetime import datetime, date
-from typing import Optional, Callable, Any, Tuple, Dict
+from typing import Optional, Callable, Tuple, Dict, List, Type
 from threading import Lock
-from queue import Queue
 import logging
 
-from ibapi.common import UNSET_DOUBLE
-from ibapi.contract import Contract as IbContract
-from ibapi.order import Order as IbOrder
-from ibapi.account_summary_tags import AccountSummaryTags
+from ibapi.account_summary_tags import AccountSummaryTags as _AccountSummaryTags
+from ib_insync.contract import (
+    Contract as _IBContract,
+    Stock as _IBStock,
+    Option as _IBOption,
+    Forex as _IBForex,
+)
+from ib_insync.order import (
+    Trade as _IBTrade,
+    Order as _IBOrder,
+    MarketOrder as _IBMarketOrder,
+    LimitOrder as _IBLimitOrder,
+    StopOrder as _IBStopOrder,
+    OrderStatus as _IBOrderStatus,
+    PriceCondition as _IBPriceCondition,
+    TimeCondition as _IBTimeCondition,
+    ExecutionCondition as _IBExecutionCondition,
+)
+from ib_insync.ticker import Ticker as _IBTicker
 
 from algotradepy.brokers.base import ABroker
 from algotradepy.connectors.ib_connector import (
@@ -25,20 +38,24 @@ from algotradepy.contracts import (
     Exchange,
     Right,
     PriceType,
+    ForexContract,
+    Currency,
 )
+from algotradepy.order_conditions import ACondition, PriceCondition, ChainType, \
+    ConditionDirection, PriceTriggerMethod, DateTimeCondition, \
+    ExecutionCondition
 from algotradepy.orders import (
     MarketOrder,
     AnOrder,
     LimitOrder,
-    OrderStatus,
     OrderAction,
-    OrderState,
     TrailingStopOrder,
 )
-
+from algotradepy.trade import Trade, TradeState, TradeStatus
 
 _IB_FULL_DATE_FORMAT = "%Y%m%d"
 _IB_MONTH_DATE_FORMAT = "%Y%m"
+_IB_DATETIME_FORMAT = "%Y%m%d %H:%M:%S"
 
 
 def _get_opt_trade_date(last_trade_date_str) -> date:
@@ -105,43 +122,47 @@ class IBBroker(ABroker):
         self._tws_orders_associated = False
         self._market_data_type_set = False
 
-        self._get_next_req_id()
-
     def __del__(self):
-        if self._positions is not None:
-            self._ib_conn.cancelPositions()
-
+        # TODO: see if we cancel all active trades placed by this broker...
         self._cancel_all_price_subscriptions()
-
-        self._ib_conn.managed_disconnect()
+        self._ib_conn.disconnect()
 
     @property
     def acc_cash(self) -> float:
-        args, kwargs = self._make_accumulation_request(
-            ib_request_fn=self._ib_conn.reqAccountSummary,
-            request_kwargs={
-                "groupName": "All",
-                "tags": AccountSummaryTags.TotalCashValue,
-            },
-            ib_receiver_fn=self._ib_conn.accountSummary,
-            ib_end_fn=self._ib_conn.accountSummaryEnd,
-            ib_cancel_fn=self._ib_conn.cancelAccountSummary,
-        )
-        acc_summary = args
-        acc_value = float(acc_summary[3])
+        acc_summary = self._ib_conn.accountSummary()
+        acc_values = [
+            float(s.value)
+            for s in acc_summary if s.tag == _AccountSummaryTags.TotalCashValue
+        ]
+        acc_value = sum(acc_values)
 
         return acc_value
 
     @property
     def datetime(self) -> datetime:
-        args, kwargs = self._make_one_shot_request(
-            ib_request_fn=self._ib_conn.reqCurrentTime,
-            ib_receiver_fn=self._ib_conn.currentTime,
-        )
-        server_time = args[0]
-        dt = datetime.fromtimestamp(server_time)
-
+        dt = self._ib_conn.reqCurrentTime()
+        dt = dt.astimezone()  # localize the timezone
         return dt
+
+    @property
+    def trades(self) -> List[Trade]:
+        ib_trades = self._ib_conn.trades()
+        trades = [
+            self._from_ib_trade(ib_trade=ib_trade) for ib_trade in ib_trades
+        ]
+        return trades
+
+    @property
+    def open_trades(self) -> List[Trade]:
+        open_ib_trades = self._ib_conn.openTrades()
+        open_trades = [
+            self._from_ib_trade(ib_trade=ib_trade)
+            for ib_trade in open_ib_trades
+        ]
+        return open_trades
+
+    def sleep(self, secs: float = SERVER_BUFFER_TIME):
+        self._ib_conn.sleep(secs)
 
     def subscribe_to_new_trades(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
@@ -149,25 +170,11 @@ class IBBroker(ABroker):
         if fn_kwargs is None:
             fn_kwargs = {}
 
-        self._gain_control_of_tws_orders()
+        def submitted_order_filter(ib_trade: _IBTrade):
+            trade = self._from_ib_trade(ib_trade=ib_trade)
+            func(trade, **fn_kwargs)
 
-        def submitted_order_filter(
-            order_id, ib_contract, ib_order, order_state
-        ):
-            if "Submitted" in order_state.status:
-                contract = self._from_ib_contract(ib_contract=ib_contract)
-                order = self._from_ib_order(
-                    order_id=order_id, ib_order=ib_order
-                )
-                if contract is not None and order is not None:
-                    func(contract, order, **fn_kwargs)
-
-        self._gain_control_of_tws_orders()
-        self._ib_conn.subscribe(
-            target_fn=self._ib_conn.openOrder,
-            callback=submitted_order_filter,
-            include_target_args=True,
-        )
+        self._ib_conn.openOrderEvent += submitted_order_filter
 
     def subscribe_to_trade_updates(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
@@ -175,29 +182,11 @@ class IBBroker(ABroker):
         if fn_kwargs is None:
             fn_kwargs = {}
 
-        def order_status_filter(
-            order_id: int,
-            status: str,
-            filled: float,
-            remaining: float,
-            ave_fill_price: float,
-            *_,
-            **__,
-        ):
-            state = self._from_ib_state(status=status)
-            status = OrderStatus(
-                order_id=order_id,
-                state=state,
-                filled=filled,
-                remaining=remaining,
-                ave_fill_price=ave_fill_price,
-            )
+        def order_status_filter(ib_trade: _IBTrade):
+            status = self._from_ib_status(ib_order_status=ib_trade.orderStatus)
             func(status, **fn_kwargs)
 
-        self._gain_control_of_tws_orders()
-        self._ib_conn.subscribe(
-            target_fn=self._ib_conn.orderStatus, callback=order_status_filter,
-        )
+        self._ib_conn.orderStatusEvent += order_status_filter
 
     def subscribe_to_tick_data(
         self,
@@ -212,51 +201,39 @@ class IBBroker(ABroker):
 
         self._set_market_data_type()
 
-        req_id = self._get_next_req_id()
+        def price_update(ticker: _IBTicker):
+            assert ticker in self._price_subscriptions
+
+            contract_ = ticker.contract
+            price_sub = self._price_subscriptions[contract_]
+            price_type_ = price_sub["price_type"]
+
+            if price_type_ == PriceType.MARKET:
+                price_ = ticker.midpoint()
+            elif price_type_ == PriceType.ASK:
+                price_ = ticker.ask
+            elif price_type_ == PriceType.BID:
+                price_ = ticker.bid
+            else:
+                raise TypeError(f"Unknown price type {price_type_}.")
+
+            func(contract_, price_, **fn_kwargs)
+
         ib_contract = self._to_ib_contract(contract=contract)
-
-        def _price_update(id_: int, tick_type_: int, price_: float, *_):
-            if id_ in self._price_subscriptions:
-                price_sub = self._price_subscriptions[id_]
-                conntract_ = price_sub["contract"]
-
-                if tick_type_ in self._ask_tick_types:
-                    price_sub["ask"] = price_
-                    if price_sub["price_type"] == PriceType.ASK:
-                        func(conntract_, price_, **fn_kwargs)
-                elif tick_type_ in self._bid_tick_types:
-                    price_sub["bid"] = price_
-                    if price_sub["price_type"] == PriceType.BID:
-                        func(conntract_, price_, **fn_kwargs)
-
-                if (
-                    price_sub["price_type"] == PriceType.MARKET
-                    and price_sub["ask"] is not None
-                    and price_sub["bid"] is not None
-                ):
-                    price_ = (price_sub["ask"] + price_sub["bid"]) / 2
-                    func(conntract_, price_, **fn_kwargs)
-                    price_sub["ask"] = None
-                    price_sub["bid"] = None
-
-        self._price_subscriptions[req_id] = {
-            "contract": contract,
+        self._price_subscriptions[contract] = {
             "func": func,
             "price_type": price_type,
             "ask": None,
             "bid": None,
         }
-        self._ib_conn.subscribe(
-            target_fn=self._ib_conn.tickPrice, callback=_price_update,
-        )
-        self._ib_conn.reqMktData(
-            reqId=req_id,
+        tick = self._ib_conn.reqMktData(
             contract=ib_contract,
             genericTickList="",
             snapshot=False,
             regulatorySnapshot=False,
             mktDataOptions=[],
         )
+        tick.updateEvent += price_update
 
     def cancel_tick_data(self, contract: AContract, func: Callable):
         # TODO: test
@@ -264,10 +241,10 @@ class IBBroker(ABroker):
             raise RuntimeError("No price subscriptions were requested.")
 
         found = False
-        for req_id, sub_dict in self._price_subscriptions.items():
-            if contract == sub_dict["contract"] and func == sub_dict["func"]:
+        for sub_contract, sub_dict in self._price_subscriptions.items():
+            if contract == sub_contract and func == sub_dict["func"]:
                 found = True
-                self._cancel_price_subscription(req_id=req_id)
+                self._cancel_price_subscription(contract=contract)
                 break
 
         if not found:
@@ -278,70 +255,54 @@ class IBBroker(ABroker):
 
     # ------------------------ TODO: add to ABroker ----------------------------
 
-    def place_order(
+    def place_trade(
         self,
-        contract: AContract,
-        order: AnOrder,
+        trade: Trade,
         *args,
         await_confirm: bool = False,
-    ) -> Tuple[bool, int]:
-        """Place an order with specified details.
+    ) -> Tuple[bool, Trade]:
+        """Place a trade with the specified details.
 
         Parameters
         ----------
-        contract : AContract
-            The contract definition for the order.
-        order : AnOrder
-            The remaining details of the order definition.
+        trade : Trade
+            The trade definition.
         await_confirm : bool, default False
             If set to true, will await confirmation from the server that the
-            order was placed. If used in a call that was triggered as a response
-            to a message received from the server, will make the thread hang.
-            TODO: fix.....
+            order was placed.
         Returns
         -------
-        tuple of bool and int
-            The tuple indicates if the order has been successfully placed,
-            whereas the int is the associated order-id.
+        tuple of `bool` and `algotradepy.Trade`
+            Returns a boolean indicating if the order was successfully placed
+            and the trade object associated with the placed order.
         """
-        placed: Optional[bool] = None
 
-        order_id = self._get_next_req_id()
-        ib_contract = self._to_ib_contract(contract=contract)
-        ib_order = self._to_ib_order(order=order)
+        ib_contract = self._to_ib_contract(contract=trade.contract)
+        ib_order = self._to_ib_order(order=trade.order)
 
-        def _update_status(id_: int, status_: str, *args):
-            nonlocal placed
-            nonlocal order_id
-
-            if id_ == order_id and placed is None:
-                if "Submitted" in status_ or status_ == "Filled":
-                    placed = True
-                elif "Cancelled" in status_:
-                    placed = False
-
-        if await_confirm:
-            self._ib_conn.subscribe(
-                target_fn=self._ib_conn.orderStatus, callback=_update_status,
-            )
-
-        self._ib_conn.placeOrder(
-            orderId=order_id, contract=ib_contract, order=ib_order,
+        ib_trade = self._ib_conn.placeOrder(
+            contract=ib_contract, order=ib_order,
         )
 
-        if await_confirm:
-            while placed is None:
-                time.sleep(SERVER_BUFFER_TIME)
-            self._ib_conn.unsubscribe(
-                target_fn=self._ib_conn.orderStatus, callback=_update_status,
-            )
-        else:
-            placed = True
+        placed = True
+        confirmed = False
+        while await_confirm and not confirmed:
+            status = ib_trade.orderStatus.status
+            if "Submitted" in status or status == "Filled":
+                placed = True
+                confirmed = True
+            elif "Cancelled" in status:
+                placed = False
+                confirmed = True
+            self.sleep()
 
-        return placed, order_id
+        trade = self._from_ib_trade(ib_trade=ib_trade)
 
-    def cancel_order(self, order_id):
-        self._ib_conn.cancelOrder(orderId=order_id)
+        return placed, trade
+
+    def cancel_trade(self, trade: Trade):
+        ib_order = self._to_ib_order(order=trade.order)
+        self._ib_conn.cancelOrder(order=ib_order)
 
     # --------------------------------------------------------------------------
 
@@ -374,92 +335,22 @@ class IBBroker(ABroker):
                 f" to request positions."
             )
 
+        if account is None:
+            account = ""
+
         pos = 0
-
-        if self._positions is None:
-            self._subscribe_to_positions()
-
-        symbol_dict: Optional[Dict] = self._positions.get(contract.symbol)
-        if symbol_dict is not None:
-            if account is None:
-                for acc, acc_dict in symbol_dict.items():
-                    pos += acc_dict["position"]
-            else:
-                pos += symbol_dict[account]["position"]
-        else:
-            pos = 0
+        positions = self._ib_conn.positions(account=account)
+        for position in positions:
+            pos_contract = self._from_ib_contract(ib_contract=position.contract)
+            if self._are_loosely_equal(
+                    loose=contract, well_defined=pos_contract,
+            ):
+                pos = position.position
+                break
 
         return pos
 
-    # ------------------------ Req ID Helpers ----------------------------------
-
-    def _get_next_req_id(self) -> int:
-        if self._req_id is None:
-            self._get_req_id_from_ib()
-            self._req_id -= 1
-        self._req_id += 1
-        return self._req_id
-
-    def _get_req_id_from_ib(self):
-        args, _ = self._make_one_shot_request(
-            ib_request_fn=self._ib_conn.reqIds,
-            ib_receiver_fn=self._ib_conn.nextValidId,
-            request_kwargs={"numIds": 1},
-        )
-        self._req_id = args[0]
-
-    # ------------------------ Position Helpers --------------------------------
-
-    def _subscribe_to_positions(self):
-        request_positions = False
-
-        with self._positions_lock:
-            if self._positions is None:
-                self._positions = {}
-                request_positions = True
-
-        if request_positions:
-            # This is not quite an accumulation request, but a common
-            # abstraction can be found.
-            self._ib_conn.subscribe(
-                target_fn=self._ib_conn.position,
-                callback=self._update_position,
-            )
-            end_queue = self._get_callback_queue(
-                ib_receiver_fn=self._ib_conn.positionEnd,
-            )
-            self._ib_conn.reqPositions()
-            self._await_results_from_queue(queue=end_queue)
-
-    def _update_position(
-        self,
-        account: str,
-        contract: IbContract,
-        position: float,
-        avg_cost: float,
-    ):
-        symbol = contract.symbol
-        with self._positions_lock:
-            symbol_pos = self._positions.setdefault(symbol, {})
-            symbol_pos_acc = symbol_pos.setdefault(account, {})
-            symbol_pos_acc["position"] = position
-            symbol_pos_acc["ave_cost"] = avg_cost
-
-    # -------------------- Contract & Order Helpers ----------------------------
-
-    def _gain_control_of_tws_orders(self):
-        """Associates this broker with all orders placed through TWS.
-
-        The IB Connector must have ID 0 to be eligible for this action.
-        """
-        if self._ib_conn.client_id != 0:
-            raise ValueError(
-                f"The {IBConnector} client ID must be 0. Current client ID"
-                f" is {self._ib_conn.client_id}."
-            )
-        if not self._tws_orders_associated:
-            self._ib_conn.reqAutoOpenOrders(bAutoBind=True)
-            self._tws_orders_associated = True
+    # ---------------------- Market Data Helpers -------------------------------
 
     def _set_market_data_type(self):
         if not self._market_data_type_set:
@@ -467,15 +358,41 @@ class IBBroker(ABroker):
             self._market_data_type_set = True
             self._price_subscriptions = {}
 
-    @staticmethod
-    def _from_ib_contract(ib_contract: IbContract):
+    def _cancel_all_price_subscriptions(self):
+        if self._price_subscriptions is not None:
+            sub_contracts = list(self._price_subscriptions.keys())
+            for sub_contract in sub_contracts:
+                self._cancel_price_subscription(contract=sub_contract)
+
+    def _cancel_price_subscription(self, contract: AContract):
+        ib_contract = self._to_ib_contract(contract=contract)
+        self._ib_conn.cancelMktData(contract=ib_contract)
+        del self._price_subscriptions[contract]
+
+    # ------------------------------ Converters --------------------------------
+
+    def _from_ib_trade(self, ib_trade: _IBTrade) -> Trade:
+        contract = self._from_ib_contract(ib_contract=ib_trade.contract)
+        order = self._from_ib_order(ib_order=ib_trade.order)
+        status = self._from_ib_status(ib_order_status=ib_trade.orderStatus)
+        trade = Trade(contract=contract, order=order, status=status)
+
+        return trade
+
+    def _from_ib_contract(self, ib_contract: _IBContract):
         contract = None
 
-        if ib_contract.secType == "STK":
+        exchange = self._from_ib_exchange(ib_exchange=ib_contract.exchange)
+        currency = self._from_ib_currency(ib_currency=ib_contract.currency)
+
+        if isinstance(ib_contract, _IBStock):
             contract = StockContract(
-                con_id=ib_contract.conId, symbol=ib_contract.symbol,
+                con_id=ib_contract.conId,
+                symbol=ib_contract.symbol,
+                exchange=exchange,
+                currency=currency,
             )
-        elif ib_contract.secType == "OPT":
+        elif isinstance(ib_contract, _IBOption):
             last_trade_date = _get_opt_trade_date(
                 last_trade_date_str=ib_contract.lastTradeDateOrContractMonth,
             )
@@ -490,8 +407,17 @@ class IBBroker(ABroker):
                 symbol=ib_contract.symbol,
                 strike=ib_contract.strike,
                 right=right,
-                multiplier=ib_contract.multiplier,
+                multiplier=float(ib_contract.multiplier),
                 last_trade_date=last_trade_date,
+                exchange=exchange,
+                currency=currency,
+            )
+        elif isinstance(ib_contract, _IBForex):
+            contract = ForexContract(
+                symbol=ib_contract.symbol,
+                con_id=ib_contract.conId,
+                exchange=exchange,
+                currency=currency,
             )
         else:
             logging.warning(
@@ -501,34 +427,39 @@ class IBBroker(ABroker):
 
         return contract
 
-    @staticmethod
-    def _to_ib_contract(contract: AContract) -> IbContract:
-        ib_contract = IbContract()
-        if contract.con_id is not None:
-            ib_contract.conId = contract.con_id
-        ib_contract.symbol = contract.symbol
-        ib_contract.currency = contract.currency.value
-
-        if contract.exchange is None:
-            ib_contract.exchange = "SMART"
-        elif contract.exchange == Exchange.NASDAQ:
-            ib_contract.exchange = "ISLAND"
-        else:
-            ib_contract.exchange = contract.exchange.value
+    def _to_ib_contract(self, contract: AContract) -> _IBContract:
+        ib_exchange = self._to_ib_exchange(exchange=contract.exchange)
+        ib_currency = self._to_ib_currency(currency=contract.currency)
 
         if isinstance(contract, StockContract):
-            ib_contract.secType = "STK"
+            ib_contract = _IBStock(
+                symbol=contract.symbol,
+                exchange=ib_exchange,
+                currency=ib_currency,
+            )
         elif isinstance(contract, OptionContract):
-            ib_contract.secType = "OPT"
-            ib_contract.strike = contract.strike
+            ib_last_trade_date = contract.last_trade_date.strftime(
+                _IB_FULL_DATE_FORMAT,
+            )
             if contract.right == Right.CALL:
-                ib_contract.right = "C"
-            elif contract.right == Right.PUT:
-                ib_contract.right = "P"
+                ib_right = "C"
             else:
-                raise ValueError(f"Unknown right type {contract.right}.")
-            ib_contract.lastTradeDateOrContractMonth = contract.last_trade_date.strftime(
-                _IB_FULL_DATE_FORMAT
+                ib_right = "P"
+            ib_contract = _IBOption(
+                symbol=contract.symbol,
+                lastTradeDateOrContractMonth=ib_last_trade_date,
+                strike=contract.strike,
+                right=ib_right,
+                exchange=ib_exchange,
+                multiplier=str(contract.multiplier),
+                currency=ib_currency,
+            )
+        elif isinstance(contract, ForexContract):
+            ib_contract = _IBForex(
+                pair=f"{contract.symbol}{ib_currency}",
+                exchange=ib_exchange,
+                symbol=contract.symbol,
+                currency=ib_currency,
             )
         else:
             raise TypeError(f"Unknown type of contract {type(contract)}.")
@@ -536,44 +467,44 @@ class IBBroker(ABroker):
         return ib_contract
 
     @staticmethod
-    def _from_ib_order(order_id: int, ib_order: IbOrder) -> Optional[AnOrder]:
+    def _from_ib_order(ib_order: _IBOrder) -> Optional[AnOrder]:
+        if isinstance(ib_order, _IBOrder):
+            logging.warning(
+                f"Received poorly defined order from IB: {ib_order}."
+            )
+
         order = None
         if ib_order.action == "BUY":
             order_action = OrderAction.BUY
-        elif ib_order.action == "SELL":
-            order_action = OrderAction.SELL
         else:
-            raise ValueError(f"Unknown order action {ib_order.action}.")
+            order_action = OrderAction.SELL
+        parent_id = ib_order.parentId if ib_order.parentId else None
 
-        if ib_order.orderType == "MKT":
+        if isinstance(ib_order, _IBMarketOrder) or ib_order.orderType == "MKT":
             order = MarketOrder(
-                order_id=order_id,
+                order_id=ib_order.orderId,
                 action=order_action,
                 quantity=ib_order.totalQuantity,
+                parent_id=parent_id,
             )
-        elif ib_order.orderType == "LMT":
+        elif isinstance(ib_order, _IBLimitOrder) or ib_order.orderType == "LMT":
             order = LimitOrder(
-                order_id=order_id,
+                order_id=ib_order.orderId,
                 action=order_action,
                 quantity=ib_order.totalQuantity,
                 limit_price=ib_order.lmtPrice,
+                parent_id=parent_id,
             )
-        elif ib_order.orderType == "TRAIL":
-            if ib_order.trailingPercent == UNSET_DOUBLE:
-                trailing_percent = None
-            else:
-                trailing_percent = ib_order.trailingPercent
-            if ib_order.auxPrice == UNSET_DOUBLE:
-                stop_price = None
-            else:
-                stop_price = ib_order.auxPrice
-
+        elif (
+                isinstance(ib_order, _IBStopOrder)
+                or ib_order.orderType == "TRAIL"
+        ):
             order = TrailingStopOrder(
-                order_id=order_id,
+                order_id=ib_order.orderId,
                 action=order_action,
                 quantity=ib_order.totalQuantity,
-                trailing_percent=trailing_percent,
-                stop_price=stop_price,
+                stop_price=ib_order.auxPrice,
+                parent_id=parent_id,
             )
         else:
             logging.warning(
@@ -583,135 +514,284 @@ class IBBroker(ABroker):
 
         return order
 
-    @staticmethod
-    def _to_ib_order(order: AnOrder) -> IbOrder:
-        ib_order = IbOrder()
-        ib_order.action = order.action.value
-        ib_order.totalQuantity = order.quantity
-        if order.order_id is not None:
-            ib_order.orderId = order.order_id
-
+    def _to_ib_order(self, order: AnOrder) -> _IBOrder:
         if isinstance(order, MarketOrder):
-            ib_order.orderType = "MKT"
+            ib_order = _IBMarketOrder(
+                action=order.action.value,
+                totalQuantity=order.quantity,
+            )
         elif isinstance(order, LimitOrder):
-            ib_order.orderType = "LMT"
-            ib_order.lmtPrice = round(order.limit_price, 2)
+            ib_order = _IBLimitOrder(
+                action=order.action.value,
+                totalQuantity=order.quantity,
+                lmtPrice=round(order.limit_price, 2),
+            )
         elif isinstance(order, TrailingStopOrder):
-            ib_order.orderType = "TRAIL"
-            if order.stop_price is not None:
-                ib_order.auxPrice = order.stop_price
-            elif order.trailing_percent is not None:
-                ib_order.trailingPercent = order.trailing_percent
+            ib_order = _IBStopOrder(
+                action=order.action.value,
+                totalQuantity=order.quantity,
+                stopPrice=order.stop_price,
+            )
         else:
             raise TypeError(f"Unknown type of order {type(order)}.")
 
+        if order.time_in_force is not None:
+            ib_tif = order.time_in_force.value
+        else:
+            ib_tif = ""
+        ib_order.tif = ib_tif
+
+        if order.parent_id is not None:
+            ib_order.parentId = order.parent_id
+
+        for cond in order.conditions:
+            ib_cond = self._to_ib_condition(condition=cond)
+            ib_order.conditions.append(ib_cond)
+
         return ib_order
 
-    @staticmethod
-    def _from_ib_state(status: str) -> OrderState:
-        if status == "ApiPending":
-            state = OrderState.PENDING
-        elif status == "PendingSubmit":
-            state = OrderState.PENDING
-        elif status == "PreSubmitted":
-            state = OrderState.SUBMITTED
-        elif status == "Submitted":
-            state = OrderState.SUBMITTED
-        elif status == "ApiCancelled":
-            state = OrderState.CANCELLED
-        elif status == "Cancelled":
-            state = OrderState.CANCELLED
-        elif status == "Filled":
-            state = OrderState.FILLED
-        elif status == "Inactive":
-            state = OrderState.INACTIVE
+    def _to_ib_condition(self, condition: ACondition):
+        conjunction = 'a' if condition.chain_type == ChainType.AND else 'o'
+
+        if isinstance(condition, PriceCondition):
+            ib_contract = self._to_ib_contract(contract=condition.contract)
+            con_detail_defs = self._ib_conn.reqContractDetails(
+                contract=ib_contract,
+            )
+            if len(con_detail_defs) == 0:
+                raise ValueError(
+                    f"Received an unrecognized contract definition"
+                    f" {condition.contract}."
+                )
+            elif len(con_detail_defs) != 1:
+                raise ValueError(
+                    f"Received an ambiguous contract definition"
+                    f" {condition.contract}."
+                )
+            con_def = con_detail_defs[0].contract
+            is_more = condition.price_direction == ConditionDirection.MORE
+            ib_trigger_method = self._to_ib_trigger_method(
+                trigger_method=condition.trigger_method,
+            )
+            ib_cond = _IBPriceCondition(
+                conjunction=conjunction,
+                isMore=is_more,
+                price=condition.price,
+                conId=con_def.conId,
+                exch=con_def.exchange,
+                triggerMethod=ib_trigger_method,
+            )
+        elif isinstance(condition, DateTimeCondition):
+            is_more = condition.time_direction == ConditionDirection.MORE
+            ib_datetime_str = condition.target_datetime.strftime(
+                _IB_DATETIME_FORMAT,
+            )
+            ib_cond = _IBTimeCondition(
+                conjunction=conjunction,
+                isMore=is_more,
+                time=ib_datetime_str,
+            )
+        elif isinstance(condition, ExecutionCondition):
+            ib_sec_type = self._to_ib_sec_type(
+                contract_type=condition.contract_type,
+            )
+            ib_exchange = self._to_ib_exchange(exchange=condition.exchange)
+            ib_cond = _IBExecutionCondition(
+                conjunction=conjunction,
+                secType=ib_sec_type,
+                exch=ib_exchange,
+                symbol=condition.symbol,
+            )
         else:
-            raise ValueError(f"Unknown IB order status {status}.")
+            raise TypeError(
+                f"Unrecognized order condition type {type(condition)}."
+            )
+
+        return ib_cond
+
+    @staticmethod
+    def _to_ib_trigger_method(trigger_method: PriceTriggerMethod) -> int:
+        ib_trigger_method = trigger_method.value
+        return ib_trigger_method
+
+    @staticmethod
+    def _to_ib_sec_type(contract_type: Type) -> str:
+        if contract_type == StockContract:
+            ib_sec_type = "STK"
+        elif contract_type == OptionContract:
+            ib_sec_type = "OPT"
+        elif contract_type == ForexContract:
+            ib_sec_type = "CASH"
+        else:
+            raise ValueError(f"Unrecognized contract type {contract_type}.")
+
+        return ib_sec_type
+
+    def _from_ib_status(self, ib_order_status: _IBOrderStatus) -> TradeStatus:
+        state = self._from_ib_state(ib_state=ib_order_status.status)
+        status = TradeStatus(
+            state=state,
+            filled=ib_order_status.filled,
+            remaining=ib_order_status.remaining,
+            ave_fill_price=ib_order_status.avgFillPrice,
+            order_id=ib_order_status.orderId,
+        )
+
+        return status
+
+    @staticmethod
+    def _from_ib_state(ib_state: str) -> TradeState:
+        if ib_state == "ApiPending":
+            state = TradeState.PENDING
+        elif ib_state == "PendingSubmit":
+            state = TradeState.PENDING
+        elif ib_state == "PreSubmitted":
+            state = TradeState.SUBMITTED
+        elif ib_state == "Submitted":
+            state = TradeState.SUBMITTED
+        elif ib_state == "ApiCancelled":
+            state = TradeState.CANCELLED
+        elif ib_state == "Cancelled":
+            state = TradeState.CANCELLED
+        elif ib_state == "Filled":
+            state = TradeState.FILLED
+        elif ib_state == "Inactive":
+            state = TradeState.INACTIVE
+        else:
+            raise ValueError(f"Unknown IB order status {ib_state}.")
 
         return state
 
-    # ------------------------ Request Helpers ---------------------------------
+    @staticmethod
+    def _from_ib_exchange(ib_exchange: str) -> Exchange:
+        # TODO: test
+        if ib_exchange in ["", "SMART"]:
+            exchange = None
+        elif ib_exchange == "ISLAND":
+            exchange = Exchange.NASDAQ
+        elif ib_exchange == "ENEXT.BE":
+            exchange = Exchange.ENEXT_BE
+        elif ib_exchange == "IDEALPRO":
+            exchange = Exchange.FOREX
+        else:
+            exchange = Exchange.__getattr__(ib_exchange)
 
-    def _make_accumulation_request(
-        self,
-        ib_request_fn: Callable,
-        ib_receiver_fn: Callable,
-        ib_end_fn: Callable,
-        ib_cancel_fn: Optional[Callable] = None,
-        request_kwargs: Optional[Dict] = None,
-    ) -> Tuple[Tuple, Dict]:
-        if request_kwargs is None:
-            request_kwargs = {}
-        req_id = self._get_next_req_id()
-        results_queue = self._get_callback_queue(
-            ib_receiver_fn=ib_receiver_fn, req_id=req_id,
-        )
-        end_queue = self._get_callback_queue(
-            ib_receiver_fn=ib_end_fn, req_id=req_id,
-        )
-        request_kwargs["reqId"] = req_id
-
-        ib_request_fn(**request_kwargs)
-        self._await_results_from_queue(queue=end_queue)
-        args, kwargs = self._await_results_from_queue(queue=results_queue)
-
-        if ib_cancel_fn is not None:
-            ib_cancel_fn(req_id)
-
-        return args, kwargs
-
-    def _make_one_shot_request(
-        self,
-        ib_request_fn: Callable,
-        ib_receiver_fn: Callable,
-        request_kwargs: Optional[Dict] = None,
-    ) -> Tuple[Tuple, Dict]:
-        if request_kwargs is None:
-            request_kwargs = {}
-        results_queue = self._get_callback_queue(
-            ib_receiver_fn=ib_receiver_fn,
-        )
-
-        ib_request_fn(**request_kwargs)
-        args, kwargs = self._await_results_from_queue(queue=results_queue)
-
-        return args, kwargs
-
-    def _get_callback_queue(
-        self, ib_receiver_fn: Callable, req_id: Optional[int] = None,
-    ):
-        receiver_queue = Queue()
-        self._ib_conn.subscribe(
-            target_fn=ib_receiver_fn,
-            callback=self._update_queue,
-            callback_kwargs={"queue": receiver_queue, "req_id": req_id},
-        )
-
-        return receiver_queue
+        return exchange
 
     @staticmethod
-    def _update_queue(*args, queue: Queue, req_id: Optional[int], **kwargs):
-        if req_id is None or (len(args) != 0 and args[0] == req_id):
-            queue.put((args, kwargs))
+    def _to_ib_exchange(exchange: Exchange) -> str:
+        # TODO: test
+        if exchange is None:
+            ib_exchange = "SMART"
+        elif exchange == Exchange.NASDAQ:
+            ib_exchange = "ISLAND"
+        elif exchange == Exchange.ENEXT_BE:
+            ib_exchange = "ENEXT.BE"
+        elif exchange == Exchange.FOREX:
+            ib_exchange = "IDEALPRO"
+        else:
+            ib_exchange = exchange.value
+
+        return ib_exchange
 
     @staticmethod
-    def _await_results_from_queue(queue: Queue) -> Any:
-        while queue.empty():
-            time.sleep(SERVER_BUFFER_TIME)
-        res = queue.get()
+    def _from_ib_currency(ib_currency: str) -> Currency:
+        # TODO: test
+        currency = Currency.__getattr__(ib_currency)
+        return currency
 
-        return res
+    @staticmethod
+    def _to_ib_currency(currency: Currency) -> str:
+        # TODO: test
+        ib_currency = currency.value
+        return ib_currency
 
-    def _cancel_all_price_subscriptions(self):
-        req_ids = list(self._price_subscriptions.keys())
-        for req_id in req_ids:
-            self._cancel_price_subscription(req_id=req_id)
+    # ----------------------------- Comparisons --------------------------------
 
-    def _cancel_price_subscription(self, req_id: int):
-        sub_dict = self._price_subscriptions[req_id]
-        func = sub_dict["func"]
-        self._ib_conn.cancelMktData(reqId=req_id)
-        self._ib_conn.unsubscribe(
-            target_fn=self._ib_conn.tickPrice, callback=func,
+    def _are_loosely_equal(
+            self, loose: AContract, well_defined: AContract,
+    ) -> bool:
+        if loose == well_defined:
+            equal = True
+        else:
+            if not isinstance(loose, type(well_defined)):
+                equal = False
+            else:
+                if isinstance(loose, StockContract):
+                    equal = self._are_loosely_equal_stock(
+                        loose=loose, well_defined=well_defined,
+                    )
+                elif isinstance(loose, OptionContract):
+                    equal = self._are_loosely_equal_option(
+                        loose=loose, well_defined=well_defined,
+                    )
+                elif isinstance(loose, ForexContract):
+                    equal = self._are_loosely_equal_forex(
+                        loose=loose, well_defined=well_defined,
+                    )
+                else:
+                    raise TypeError(
+                        f"Unrecognized contract type {type(loose)}."
+                    )
+
+        return equal
+
+    def _are_loosely_equal_stock(
+            self, loose: StockContract, well_defined: StockContract,
+    ) -> bool:
+        equal = self._compare_a_contract_loose(
+            loose=loose, well_defined=well_defined,
         )
-        del self._price_subscriptions[req_id]
+        return equal
+
+    def _are_loosely_equal_option(
+            self, loose: OptionContract, well_defined: OptionContract,
+    ) -> bool:
+        equal = True
+        a_comparison = self._compare_a_contract_loose(
+            loose=loose, well_defined=well_defined,
+        )
+
+        if not a_comparison:
+            equal = False
+        elif loose.strike != well_defined.strike:
+            equal = False
+        elif loose.right != well_defined.right:
+            equal = False
+        elif loose.multiplier != well_defined.multiplier:
+            equal = False
+        elif loose.last_trade_date != well_defined.last_trade_date:
+            equal = False
+
+        return equal
+
+    def _are_loosely_equal_forex(
+            self, loose: ForexContract, well_defined: ForexContract,
+    ) -> bool:
+        equal = self._compare_a_contract_loose(
+            loose=loose, well_defined=well_defined,
+        )
+        return equal
+
+    @staticmethod
+    def _compare_a_contract_loose(
+            loose: AContract, well_defined: AContract,
+    ) -> bool:
+        equal = True
+
+        if loose.symbol != well_defined.symbol:
+            equal = False
+        elif loose.con_id is not None and loose.con_id != well_defined.con_id:
+            equal = False
+        elif (
+                loose.exchange is not None
+                and loose.exchange != well_defined.exchange
+        ):
+            equal = False
+        elif (
+                loose.currency is not None
+                and loose.currency != well_defined.currency
+        ):
+            equal = False
+
+        return equal

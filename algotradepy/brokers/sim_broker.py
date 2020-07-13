@@ -14,9 +14,8 @@ from algotradepy.orders import (
     LimitOrder,
     OrderAction,
     MarketOrder,
-    OrderState,
-    OrderStatus,
 )
+from algotradepy.trade import TradeState, TradeStatus, Trade
 from algotradepy.time_utils import (
     generate_trading_schedule,
     get_next_trading_date,
@@ -200,7 +199,7 @@ class SimulationBroker(ABroker):
         self._valid_id = 0
         self._new_trade_subscribers = []
         self._trade_updates_subscribers = []
-        self._placed_trades = {}  # {id: [contract, order, filled]}
+        self._placed_trades: List[Trade] = []
 
     @property
     def acc_cash(self) -> float:
@@ -211,7 +210,11 @@ class SimulationBroker(ABroker):
         return self._clock.datetime
 
     @property
-    def trades(self) -> List[Tuple[int, AContract, AnOrder]]:
+    def trades(self) -> List[Trade]:
+        return self._placed_trades
+
+    @property
+    def open_trades(self) -> List[Trade]:
         """Mostly used for testing.
 
         Returns
@@ -219,12 +222,16 @@ class SimulationBroker(ABroker):
         trades : list of tuples of int, AContract and AnOrder pairs
             The currently active trades.
         """
-        trades = []
+        done_statuses = [TradeState.CANCELLED, TradeState.FILLED]
+        open_trades = []
+        for trade in self._placed_trades:
+            if trade.status.state not in done_statuses:
+                open_trades.append(trade)
 
-        for trade_id, trade_tuple in self._placed_trades.items():
-            trades.append((trade_id, trade_tuple[0], trade_tuple[1]))
+        return open_trades
 
-        return trades
+    def __del__(self):
+        pass
 
     def subscribe_to_bars(
         self,
@@ -293,26 +300,25 @@ class SimulationBroker(ABroker):
             if len(callbacks) == 0:
                 del self._tick_callback_table[contract]
 
-    def place_order(
-        self, contract: AContract, order: AnOrder, *args, **kwargs
-    ) -> Tuple[bool, int]:
+    def place_trade(self, trade: Trade, *args, **kwargs) -> Tuple[bool, Trade]:
         # TODO: test for Limit and Stop Loss Orders
         trade_id = self._get_increment_valid_id()
-        self._placed_trades[trade_id] = [contract, order, 0]
+        trade.order._order_id = trade_id
+        self._placed_trades.append(trade)
 
-        if isinstance(order, MarketOrder):
+        if isinstance(trade.order, MarketOrder):
             # TODO: This should be smarter... What if liquidity is low?
             self._execute_trade(trade_id=trade_id)
 
         self._update_trade_updates_subscribers(
-            trade_id=trade_id, state=OrderState.SUBMITTED,
+            trade_id=trade_id, state=TradeState.SUBMITTED,
         )
 
         # update trade placed subscribers
         for func, fn_kwargs in self._new_trade_subscribers:
-            func(contract, order, **fn_kwargs)
+            func(trade, **fn_kwargs)
 
-        return True, trade_id
+        return True, trade
 
     def get_position(self, contract: AContract, *args, **kwargs) -> float:
         symbol = contract.symbol
@@ -453,7 +459,7 @@ class SimulationBroker(ABroker):
         filled += n_shares
         self._placed_trades[trade_id][2] = filled
         self._update_trade_updates_subscribers(
-            trade_id=trade_id, state=OrderState.FILLED, ave_fill_price=price,
+            trade_id=trade_id, state=TradeState.FILLED, ave_fill_price=price,
         )
         if filled == order.quantity:
             self._remove_trade(trade_id=trade_id)
@@ -467,11 +473,11 @@ class SimulationBroker(ABroker):
         del self._placed_trades[trade_id]
 
     def _update_trade_updates_subscribers(
-        self, trade_id: int, state: OrderState, ave_fill_price: float = 0
+        self, trade_id: int, state: TradeState, ave_fill_price: float = 0
     ):
         _, order, filled = self._placed_trades[trade_id]
         remaining = order.quantity - filled
-        status = OrderStatus(
+        status = TradeStatus(
             order_id=trade_id,
             state=state,
             filled=filled,

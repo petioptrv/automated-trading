@@ -31,7 +31,7 @@ setup(
         "pandas_market_calendars >=1, <2",
     ],
     extras_require={
-        "ibapi": ["ibapi >=9, <10"],
+        "ibapi": ["ib_insync >=0.9, <1"],
         "dev": [
             "pytest",
             "pylint",

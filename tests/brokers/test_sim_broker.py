@@ -198,7 +198,7 @@ def test_simulation_broker_buy(sim_broker_15m, spy_stock_contract):
     order = MarketOrder(action=OrderAction.BUY, quantity=1)
 
     broker._clock.tick()  # TODO: remove use of implementation details
-    broker.place_order(contract=contract, order=order)
+    broker.place_trade(contract=contract, order=order)
 
     spy_2020_4_6_9_45_open = 257.78
 
@@ -215,7 +215,7 @@ def test_simulation_broker_sell(sim_broker_15m):
     order = MarketOrder(action=OrderAction.SELL, quantity=1)
 
     broker._clock.tick()  # TODO: remove use of implementation details
-    broker.place_order(contract=contract, order=order)
+    broker.place_trade(contract=contract, order=order)
 
     spy_2020_4_6_9_30_close = 257.77
 

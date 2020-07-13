@@ -36,6 +36,9 @@ class Exchange(Enum):
     ASX = "ASX"
     TSEJ = "TSEJ"
 
+    # Global
+    FOREX = "FOREX"
+
 
 class Currency(Enum):
     # North Americ
@@ -146,3 +149,21 @@ class OptionContract(AContract):
     @property
     def last_trade_date(self) -> date:
         return self._last_trade_date
+
+
+class ForexContract(AContract):
+    def __init__(
+            self,
+            symbol: str,
+            con_id: Optional[int] = None,
+            exchange: Optional[Exchange] = Exchange.FOREX,
+            currency: Currency = Currency.USD,
+    ):
+        if symbol not in [c.value for c in Currency]:
+            raise ValueError(
+                f"The symbol {symbol} is not a valid symbol for a"
+                f" {type(ForexContract)}."
+            )
+        super().__init__(
+            con_id=con_id, symbol=symbol, exchange=exchange, currency=currency
+        )

@@ -3,7 +3,8 @@ from datetime import datetime, timedelta
 from typing import Callable, Optional, Dict, Tuple
 
 from algotradepy.contracts import AContract, PriceType
-from algotradepy.orders import AnOrder, OrderStatus
+from algotradepy.orders import AnOrder
+from algotradepy.trade import TradeStatus, Trade
 
 
 class NoPaperTradeException(Exception):
@@ -41,6 +42,10 @@ class ABroker(ABC):
         """Server date and time."""
         raise NotImplementedError
 
+    @abstractmethod
+    def __del__(self):
+        raise NotImplementedError
+
     def subscribe_to_new_trades(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
@@ -67,7 +72,7 @@ class ABroker(ABC):
         Parameters
         ----------
         func : Callable
-            The callback function. It must accept an {OrderStatus} as its sole
+            The callback function. It must accept an {TradeStatus} as its sole
             positional argument.
         fn_kwargs : dict
             The keyword arguments to pass to the callback function along with
@@ -137,17 +142,15 @@ class ABroker(ABC):
         """
         raise NotImplementedError
 
-    def place_order(
-        self, contract: AContract, order: AnOrder, *args, **kwargs
-    ) -> Tuple[bool, int]:
+    def place_trade(
+        self, trade: Trade, *args, **kwargs
+    ) -> Tuple[bool, Trade]:
         """Place an order with specified details.
 
         Parameters
         ----------
-        contract : AContract
-            The contract definition for the order.
-        order : AnOrder
-            The remaining details of the order definition.
+        trade : algotradepy.Trade
+            The trade-definition to execute.
         Returns
         -------
         tuple of bool and int

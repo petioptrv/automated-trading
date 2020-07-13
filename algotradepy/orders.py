@@ -1,8 +1,9 @@
 from abc import ABC
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 
-from algotradepy.utils import ReprAble, Comparable
+from algotradepy.order_conditions import ACondition
+from algotradepy.utils import ReprAble
 
 
 class OrderAction(Enum):
@@ -10,49 +11,8 @@ class OrderAction(Enum):
     SELL = "SELL"
 
 
-class OrderState(Enum):
-    SUBMITTED = "SUBMITTED"
-    FILLED = "FILLED"
-    CANCELLED = "CANCELLED"
-    PENDING = "PENDING"
-    INACTIVE = "INACTIVE"
-
-
-class OrderStatus(ReprAble, Comparable):
-    def __init__(
-        self,
-        state: OrderState,
-        filled: float,
-        remaining: float,
-        ave_fill_price: float,
-        order_id: Optional[int],
-    ):
-        super().__init__()
-        self._order_id = order_id
-        self._state = state
-        self._filled = filled
-        self._remaining = remaining
-        self._ave_fill_price = ave_fill_price
-
-    @property
-    def order_id(self) -> int:
-        return self._order_id
-
-    @property
-    def state(self):
-        return self._state
-
-    @property
-    def filled(self):
-        return self._filled
-
-    @property
-    def remaining(self):
-        return self._remaining
-
-    @property
-    def ave_fill_price(self):
-        return self._ave_fill_price
+class TimeInForce(Enum):
+    DAY = "DAY"
 
 
 class AnOrder(ABC, ReprAble):
@@ -61,11 +21,19 @@ class AnOrder(ABC, ReprAble):
         action: OrderAction,
         quantity: float,
         order_id: Optional[int] = None,
+        time_in_force: Optional[TimeInForce] = None,
+        conditions: Optional[List[ACondition]] = None,
+        parent_id: Optional[int] = None,
     ):
         super().__init__()
         self._order_id = order_id
         self._action = action
         self._quantity = quantity
+        self._time_in_force = time_in_force
+        if conditions is None:
+            conditions = []
+        self._conditions = conditions
+        self._parent_id = parent_id
 
     @property
     def order_id(self) -> int:
@@ -79,6 +47,18 @@ class AnOrder(ABC, ReprAble):
     def quantity(self) -> float:
         return self._quantity
 
+    @property
+    def time_in_force(self) -> TimeInForce:
+        return self._time_in_force
+
+    @property
+    def conditions(self) -> List[ACondition]:
+        return self._conditions
+
+    @property
+    def parent_id(self):
+        return self._parent_id
+
 
 class MarketOrder(AnOrder):
     def __init__(
@@ -86,9 +66,13 @@ class MarketOrder(AnOrder):
         action: OrderAction,
         quantity: float,
         order_id: Optional[int] = None,
+        **kwargs,
     ):
         super().__init__(
-            order_id=order_id, action=action, quantity=quantity,
+            order_id=order_id,
+            action=action,
+            quantity=quantity,
+            **kwargs
         )
 
 
@@ -99,9 +83,13 @@ class LimitOrder(AnOrder):
         quantity: float,
         limit_price: float,
         order_id: Optional[int] = None,
+        **kwargs
     ):
         super().__init__(
-            order_id=order_id, action=action, quantity=quantity,
+            order_id=order_id,
+            action=action,
+            quantity=quantity,
+            **kwargs
         )
         self._limit_price = limit_price
 
@@ -116,22 +104,18 @@ class TrailingStopOrder(AnOrder):
         self,
         action: OrderAction,
         quantity: float,
-        stop_price: Optional[float] = None,
-        trailing_percent: Optional[float] = None,
+        stop_price: float,
         order_id: Optional[int] = None,
+        **kwargs
     ):
-        assert stop_price is not None or trailing_percent is not None
-
         super().__init__(
-            order_id=order_id, action=action, quantity=quantity,
+            order_id=order_id,
+            action=action,
+            quantity=quantity,
+            **kwargs
         )
         self._stop_price = stop_price
-        self._trailing_percent = trailing_percent
 
     @property
     def stop_price(self):
         return self._stop_price
-
-    @property
-    def trailing_percent(self):
-        return self._trailing_percent

@@ -13,6 +13,7 @@ class OrderAction(Enum):
 
 class TimeInForce(Enum):
     DAY = "DAY"
+    GTC = "GTC"
 
 
 class AnOrder(ABC, ReprAble):
@@ -99,23 +100,48 @@ class LimitOrder(AnOrder):
 
 
 class TrailingStopOrder(AnOrder):
-    # TODO: test
+    # TODO: document
     def __init__(
         self,
         action: OrderAction,
         quantity: float,
-        stop_price: float,
+        trail_stop_price: Optional[float] = None,
+        aux_price: Optional[float] = None,
+        trail_percent: Optional[float] = None,
         order_id: Optional[int] = None,
         **kwargs
     ):
+        self._validate(
+            aux_price=aux_price, trail_percent=trail_percent,
+        )
         super().__init__(
             order_id=order_id,
             action=action,
             quantity=quantity,
             **kwargs
         )
-        self._stop_price = stop_price
+        self._trail_stop_price = trail_stop_price
+        self._trail_percent = trail_percent
+        self._aux_price = aux_price
 
     @property
-    def stop_price(self):
-        return self._stop_price
+    def trail_stop_price(self) -> Optional[float]:
+        return self._trail_stop_price
+
+    @property
+    def trail_percent(self) -> Optional[float]:
+        return self._trail_percent
+
+    @property
+    def aux_price(self):
+        return self._aux_price
+
+    @staticmethod
+    def _validate(
+            aux_price: Optional[float], trail_percent: Optional[float],
+    ):
+        if (trail_percent is None) == (aux_price is None):
+            raise ValueError(
+                f"Exactly one of aux_price or trail_percent must be specified"
+                f" for {TrailingStopOrder.__name__}."
+            )

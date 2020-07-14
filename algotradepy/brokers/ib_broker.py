@@ -1,9 +1,16 @@
 import calendar
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional, Callable, Tuple, Dict, List, Type
-from threading import Lock
 import logging
 
+try:
+    import ib_insync
+except ImportError:
+    raise ImportError(
+        f"Optional package ib_insync not install. Please install"
+        f" using 'pip install ib_insync'."
+    )
+from ib_insync.util import UNSET_DOUBLE
 from ibapi.account_summary_tags import AccountSummaryTags as _AccountSummaryTags
 from ib_insync.contract import (
     Contract as _IBContract,
@@ -16,7 +23,6 @@ from ib_insync.order import (
     Order as _IBOrder,
     MarketOrder as _IBMarketOrder,
     LimitOrder as _IBLimitOrder,
-    StopOrder as _IBStopOrder,
     OrderStatus as _IBOrderStatus,
     PriceCondition as _IBPriceCondition,
     TimeCondition as _IBTimeCondition,
@@ -39,11 +45,17 @@ from algotradepy.contracts import (
     Right,
     PriceType,
     ForexContract,
-    Currency,
+    Currency, are_loosely_equal_contracts,
 )
-from algotradepy.order_conditions import ACondition, PriceCondition, ChainType, \
-    ConditionDirection, PriceTriggerMethod, DateTimeCondition, \
-    ExecutionCondition
+from algotradepy.order_conditions import (
+    ACondition,
+    PriceCondition,
+    ChainType,
+    ConditionDirection,
+    PriceTriggerMethod,
+    DateTimeCondition,
+    ExecutionCondition,
+)
 from algotradepy.orders import (
     MarketOrder,
     AnOrder,
@@ -55,7 +67,8 @@ from algotradepy.trade import Trade, TradeState, TradeStatus
 
 _IB_FULL_DATE_FORMAT = "%Y%m%d"
 _IB_MONTH_DATE_FORMAT = "%Y%m"
-_IB_DATETIME_FORMAT = "%Y%m%d %H:%M:%S"
+_IB_DATETIME_FORMAT = f"{_IB_FULL_DATE_FORMAT} %H:%M:%S"
+_IB_DATETIME_FORMAT_TZ = f"{_IB_DATETIME_FORMAT} %Z"
 
 
 def _get_opt_trade_date(last_trade_date_str) -> date:
@@ -82,28 +95,20 @@ class IBBroker(ABroker):
     Parameters
     ----------
     simulation : bool, default True
-        TODO: link to ABroker docs
         Ignored if parameter `ib_connector` is supplied.
     ib_connector : IBConnector, optional, default None
         A custom instance of the `IBConnector` can be supplied. If not provided,
         it is assumed that the receiver is TWS (see `IBConnector`'s
         documentation for more details).
-
-    Notes
-    -----
-    - TODO: Consider moving all server-related logic out of this class
-      (e.g. all of the request handling functionality, and req_id).
     """
 
-    _ask_tick_types = [1, 67]
-    _bid_tick_types = [2, 66]
-
     def __init__(
-        self,
-        simulation: bool = True,
-        ib_connector: Optional[IBConnector] = None,
+            self,
+            simulation: bool = True,
+            ib_connector: Optional[IBConnector] = None,
     ):
         super().__init__(simulation=simulation)
+
         if ib_connector is None:
             if simulation:
                 trading_mode = "paper"
@@ -114,12 +119,9 @@ class IBBroker(ABroker):
             )
         else:
             self._ib_conn = ib_connector
-        self._req_id: Optional[int] = None
-        self._positions: Optional[Dict] = None
-        self._positions_lock = Lock()
-        self._price_subscriptions: Optional[Dict] = None
 
-        self._tws_orders_associated = False
+        # {contract: {func: price_type}}
+        self._price_subscriptions: Optional[Dict] = None
         self._market_data_type_set = False
 
     def __del__(self):
@@ -130,10 +132,12 @@ class IBBroker(ABroker):
     @property
     def acc_cash(self) -> float:
         acc_summary = self._ib_conn.accountSummary()
-        acc_values = [
-            float(s.value)
-            for s in acc_summary if s.tag == _AccountSummaryTags.TotalCashValue
-        ]
+        acc_values = []
+
+        for s in acc_summary:
+            if s.tag == _AccountSummaryTags.TotalCashValue:
+                acc_values.append(float(s.value))
+
         acc_value = sum(acc_values)
 
         return acc_value
@@ -148,7 +152,8 @@ class IBBroker(ABroker):
     def trades(self) -> List[Trade]:
         ib_trades = self._ib_conn.trades()
         trades = [
-            self._from_ib_trade(ib_trade=ib_trade) for ib_trade in ib_trades
+            self._from_ib_trade(ib_trade=ib_trade)
+            for ib_trade in ib_trades
         ]
         return trades
 
@@ -165,7 +170,7 @@ class IBBroker(ABroker):
         self._ib_conn.sleep(secs)
 
     def subscribe_to_new_trades(
-        self, func: Callable, fn_kwargs: Optional[Dict] = None,
+            self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
         if fn_kwargs is None:
             fn_kwargs = {}
@@ -177,7 +182,7 @@ class IBBroker(ABroker):
         self._ib_conn.openOrderEvent += submitted_order_filter
 
     def subscribe_to_trade_updates(
-        self, func: Callable, fn_kwargs: Optional[Dict] = None,
+            self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
         if fn_kwargs is None:
             fn_kwargs = {}
@@ -188,63 +193,73 @@ class IBBroker(ABroker):
 
         self._ib_conn.orderStatusEvent += order_status_filter
 
-    def subscribe_to_tick_data(
-        self,
-        contract: AContract,
-        func: Callable,
-        fn_kwargs: Optional[Dict] = None,
-        price_type: PriceType = PriceType.MARKET,
+    def subscribe_to_bars(
+            self,
+            contract: AContract,
+            bar_size: timedelta,
+            func: Callable,
+            fn_kwargs: Optional[dict] = None,
     ):
-        # TODO: test
+        # TODO: implement
+        raise NotImplementedError
+
+    def subscribe_to_tick_data(
+            self,
+            contract: AContract,
+            func: Callable,
+            fn_kwargs: Optional[Dict] = None,
+            price_type: PriceType = PriceType.MARKET,
+    ):
         if fn_kwargs is None:
             fn_kwargs = {}
 
         self._set_market_data_type()
 
         def price_update(ticker: _IBTicker):
-            assert ticker in self._price_subscriptions
+            contract_ = self._from_ib_contract(ib_contract=ticker.contract)
+            assert contract_ in self._price_subscriptions
 
-            contract_ = ticker.contract
-            price_sub = self._price_subscriptions[contract_]
-            price_type_ = price_sub["price_type"]
+            con_subs_ = self._price_subscriptions[contract_]
 
-            if price_type_ == PriceType.MARKET:
-                price_ = ticker.midpoint()
-            elif price_type_ == PriceType.ASK:
-                price_ = ticker.ask
-            elif price_type_ == PriceType.BID:
-                price_ = ticker.bid
-            else:
-                raise TypeError(f"Unknown price type {price_type_}.")
+            for func_, price_type_ in con_subs_.items():
+                if price_type_ == PriceType.MARKET:
+                    price_ = ticker.midpoint()
+                elif price_type_ == PriceType.ASK:
+                    price_ = ticker.ask
+                elif price_type_ == PriceType.BID:
+                    price_ = ticker.bid
+                else:
+                    raise TypeError(f"Unknown price type {price_type_}.")
 
-            func(contract_, price_, **fn_kwargs)
+                func_(contract_, price_, **fn_kwargs)
 
-        ib_contract = self._to_ib_contract(contract=contract)
-        self._price_subscriptions[contract] = {
-            "func": func,
-            "price_type": price_type,
-            "ask": None,
-            "bid": None,
-        }
-        tick = self._ib_conn.reqMktData(
-            contract=ib_contract,
-            genericTickList="",
-            snapshot=False,
-            regulatorySnapshot=False,
-            mktDataOptions=[],
-        )
-        tick.updateEvent += price_update
+        previously_requested = contract in self._price_subscriptions
+
+        con_subs = self._price_subscriptions.setdefault(contract, {})
+        con_subs[func] = price_type
+
+        if not previously_requested:
+            ib_contract = self._to_ib_contract(contract=contract)
+            tick = self._ib_conn.reqMktData(
+                contract=ib_contract,
+                genericTickList="",
+                snapshot=False,
+                regulatorySnapshot=False,
+                mktDataOptions=[],
+            )
+            tick.updateEvent += price_update
 
     def cancel_tick_data(self, contract: AContract, func: Callable):
-        # TODO: test
         if self._market_data_type_set is None:
             raise RuntimeError("No price subscriptions were requested.")
 
         found = False
         for sub_contract, sub_dict in self._price_subscriptions.items():
-            if contract == sub_contract and func == sub_dict["func"]:
+            if contract == sub_contract and func in sub_dict:
                 found = True
-                self._cancel_price_subscription(contract=contract)
+                del sub_dict[func]
+                if len(sub_dict) == 0:
+                    self._cancel_price_subscription(contract=contract)
                 break
 
         if not found:
@@ -253,30 +268,12 @@ class IBBroker(ABroker):
                 f" function {func}."
             )
 
-    # ------------------------ TODO: add to ABroker ----------------------------
-
     def place_trade(
-        self,
-        trade: Trade,
-        *args,
-        await_confirm: bool = False,
+            self,
+            trade: Trade,
+            *args,
+            await_confirm: bool = False,
     ) -> Tuple[bool, Trade]:
-        """Place a trade with the specified details.
-
-        Parameters
-        ----------
-        trade : Trade
-            The trade definition.
-        await_confirm : bool, default False
-            If set to true, will await confirmation from the server that the
-            order was placed.
-        Returns
-        -------
-        tuple of `bool` and `algotradepy.Trade`
-            Returns a boolean indicating if the order was successfully placed
-            and the trade object associated with the placed order.
-        """
-
         ib_contract = self._to_ib_contract(contract=trade.contract)
         ib_order = self._to_ib_order(order=trade.order)
 
@@ -304,30 +301,13 @@ class IBBroker(ABroker):
         ib_order = self._to_ib_order(order=trade.order)
         self._ib_conn.cancelOrder(order=ib_order)
 
-    # --------------------------------------------------------------------------
-
     def get_position(
-        self,
-        contract: AContract,
-        *args,
-        account: Optional[str] = None,
-        **kwargs,
+            self,
+            contract: AContract,
+            *args,
+            account: Optional[str] = None,
+            **kwargs,
     ) -> float:
-        """Get the current position for the specified symbol.
-
-        Parameters
-        ----------
-        contract : AContract
-            The contract definition for which the position is required.
-        account : str, optional, default None
-            The account for which the position is requested. If not specified,
-            all accounts' positions for that symbol are summed.
-
-        Returns
-        -------
-        pos : float
-            The position for the specified symbol.
-        """
         if self._ib_conn.client_id != MASTER_CLIENT_ID:
             raise AttributeError(
                 f"This client ID cannot request positions. Please use a broker"
@@ -342,13 +322,18 @@ class IBBroker(ABroker):
         positions = self._ib_conn.positions(account=account)
         for position in positions:
             pos_contract = self._from_ib_contract(ib_contract=position.contract)
-            if self._are_loosely_equal(
+            if are_loosely_equal_contracts(
                     loose=contract, well_defined=pos_contract,
             ):
                 pos = position.position
                 break
 
         return pos
+
+    def get_transaction_fee(self) -> float:
+        # TODO: implement
+        # TODO: test
+        raise NotImplementedError
 
     # ---------------------- Market Data Helpers -------------------------------
 
@@ -384,10 +369,13 @@ class IBBroker(ABroker):
 
         exchange = self._from_ib_exchange(ib_exchange=ib_contract.exchange)
         currency = self._from_ib_currency(ib_currency=ib_contract.currency)
+        con_id = ib_contract.conId
+        if con_id == 0:
+            con_id = None
 
         if isinstance(ib_contract, _IBStock):
             contract = StockContract(
-                con_id=ib_contract.conId,
+                con_id=con_id,
                 symbol=ib_contract.symbol,
                 exchange=exchange,
                 currency=currency,
@@ -403,7 +391,7 @@ class IBBroker(ABroker):
             else:
                 raise ValueError(f"Unknown right type {ib_contract.right}.")
             contract = OptionContract(
-                con_id=ib_contract.conId,
+                con_id=con_id,
                 symbol=ib_contract.symbol,
                 strike=ib_contract.strike,
                 right=right,
@@ -415,7 +403,7 @@ class IBBroker(ABroker):
         elif isinstance(ib_contract, _IBForex):
             contract = ForexContract(
                 symbol=ib_contract.symbol,
-                con_id=ib_contract.conId,
+                con_id=con_id,
                 exchange=exchange,
                 currency=currency,
             )
@@ -495,15 +483,23 @@ class IBBroker(ABroker):
                 limit_price=ib_order.lmtPrice,
                 parent_id=parent_id,
             )
-        elif (
-                isinstance(ib_order, _IBStopOrder)
-                or ib_order.orderType == "TRAIL"
-        ):
+        elif ib_order.orderType == "TRAIL":
+            aux_price = ib_order.auxPrice
+            if aux_price == UNSET_DOUBLE:
+                aux_price = None
+            trail_stop_price = ib_order.trailStopPrice
+            if trail_stop_price == UNSET_DOUBLE:
+                trail_stop_price = None
+            trail_percent = ib_order.trailingPercent
+            if trail_percent == UNSET_DOUBLE:
+                trail_percent = None
             order = TrailingStopOrder(
                 order_id=ib_order.orderId,
                 action=order_action,
                 quantity=ib_order.totalQuantity,
-                stop_price=ib_order.auxPrice,
+                trail_stop_price=trail_stop_price,
+                aux_price=aux_price,
+                trail_percent=trail_percent,
                 parent_id=parent_id,
             )
         else:
@@ -527,10 +523,16 @@ class IBBroker(ABroker):
                 lmtPrice=round(order.limit_price, 2),
             )
         elif isinstance(order, TrailingStopOrder):
-            ib_order = _IBStopOrder(
+            ib_trail_percent = order.trail_percent or UNSET_DOUBLE
+            ib_stop_price = order.trail_stop_price or UNSET_DOUBLE
+            ib_aux_price = order.aux_price or UNSET_DOUBLE
+            ib_order = _IBOrder(
+                orderType="TRAIL",
                 action=order.action.value,
                 totalQuantity=order.quantity,
-                stopPrice=order.stop_price,
+                trailingPercent=ib_trail_percent,
+                trailStopPrice=ib_stop_price,
+                auxPrice=ib_aux_price,
             )
         else:
             raise TypeError(f"Unknown type of order {type(order)}.")
@@ -551,61 +553,95 @@ class IBBroker(ABroker):
         return ib_order
 
     def _to_ib_condition(self, condition: ACondition):
-        conjunction = 'a' if condition.chain_type == ChainType.AND else 'o'
-
         if isinstance(condition, PriceCondition):
-            ib_contract = self._to_ib_contract(contract=condition.contract)
-            con_detail_defs = self._ib_conn.reqContractDetails(
-                contract=ib_contract,
-            )
-            if len(con_detail_defs) == 0:
-                raise ValueError(
-                    f"Received an unrecognized contract definition"
-                    f" {condition.contract}."
-                )
-            elif len(con_detail_defs) != 1:
-                raise ValueError(
-                    f"Received an ambiguous contract definition"
-                    f" {condition.contract}."
-                )
-            con_def = con_detail_defs[0].contract
-            is_more = condition.price_direction == ConditionDirection.MORE
-            ib_trigger_method = self._to_ib_trigger_method(
-                trigger_method=condition.trigger_method,
-            )
-            ib_cond = _IBPriceCondition(
-                conjunction=conjunction,
-                isMore=is_more,
-                price=condition.price,
-                conId=con_def.conId,
-                exch=con_def.exchange,
-                triggerMethod=ib_trigger_method,
-            )
+            ib_cond = self._to_ib_price_condition(condition=condition)
         elif isinstance(condition, DateTimeCondition):
-            is_more = condition.time_direction == ConditionDirection.MORE
-            ib_datetime_str = condition.target_datetime.strftime(
-                _IB_DATETIME_FORMAT,
-            )
-            ib_cond = _IBTimeCondition(
-                conjunction=conjunction,
-                isMore=is_more,
-                time=ib_datetime_str,
-            )
+            ib_cond = self._to_ib_time_condition(condition=condition)
         elif isinstance(condition, ExecutionCondition):
-            ib_sec_type = self._to_ib_sec_type(
-                contract_type=condition.contract_type,
-            )
-            ib_exchange = self._to_ib_exchange(exchange=condition.exchange)
-            ib_cond = _IBExecutionCondition(
-                conjunction=conjunction,
-                secType=ib_sec_type,
-                exch=ib_exchange,
-                symbol=condition.symbol,
-            )
+            ib_cond = self._to_ib_execution_condition(condition=condition)
         else:
             raise TypeError(
                 f"Unrecognized order condition type {type(condition)}."
             )
+
+        return ib_cond
+
+    def _to_ib_price_condition(
+            self, condition: PriceCondition,
+    ) -> _IBPriceCondition:
+        conjunction = 'a' if condition.chain_type == ChainType.AND else 'o'
+        ib_contract = self._to_ib_contract(contract=condition.contract)
+        con_detail_defs = self._ib_conn.reqContractDetails(
+            contract=ib_contract,
+        )
+        if len(con_detail_defs) == 0:
+            raise ValueError(
+                f"Received an unrecognized contract definition"
+                f" {condition.contract}."
+            )
+        elif len(con_detail_defs) != 1:
+            raise ValueError(
+                f"Received an ambiguous contract definition"
+                f" {condition.contract}."
+            )
+        con_def = con_detail_defs[0].contract
+        is_more = condition.price_direction == ConditionDirection.MORE
+        ib_trigger_method = self._to_ib_trigger_method(
+            trigger_method=condition.trigger_method,
+        )
+        ib_cond = _IBPriceCondition(
+            conjunction=conjunction,
+            isMore=is_more,
+            price=condition.price,
+            conId=con_def.conId,
+            exch=con_def.exchange,
+            triggerMethod=ib_trigger_method,
+        )
+
+        return ib_cond
+
+    def _to_ib_time_condition(
+            self, condition: DateTimeCondition,
+    ) -> _IBTimeCondition:
+        conjunction = 'a' if condition.chain_type == ChainType.AND else 'o'
+        is_more = condition.time_direction == ConditionDirection.MORE
+        dt = condition.target_datetime
+        dt_format = _IB_DATETIME_FORMAT
+        # TODO: move to is_time_aware util function
+        if dt.tzinfo is not None or dt.tzinfo.utcoffset(dt) is not None:
+            dt_format = _IB_DATETIME_FORMAT_TZ
+        ib_datetime_str = dt.strftime(dt_format)
+        ib_datetime_str = self._validate_ib_dt_str(ib_dt_str=ib_datetime_str)
+        ib_cond = _IBTimeCondition(
+            conjunction=conjunction,
+            isMore=is_more,
+            time=ib_datetime_str,
+        )
+
+        return ib_cond
+
+    @staticmethod
+    def _validate_ib_dt_str(ib_dt_str: str) -> str:
+        if ib_dt_str[-4:] == "CEST":
+            ib_dt_str = ib_dt_str[:-4] + "CET"
+
+        return ib_dt_str
+
+    def _to_ib_execution_condition(
+            self,
+            condition: ExecutionCondition,
+    ) -> _IBExecutionCondition:
+        conjunction = 'a' if condition.chain_type == ChainType.AND else 'o'
+        ib_sec_type = self._to_ib_sec_type(
+            contract_type=condition.contract_type,
+        )
+        ib_exchange = self._to_ib_exchange(exchange=condition.exchange)
+        ib_cond = _IBExecutionCondition(
+            conjunction=conjunction,
+            secType=ib_sec_type,
+            exch=ib_exchange,
+            symbol=condition.symbol,
+        )
 
         return ib_cond
 
@@ -705,93 +741,3 @@ class IBBroker(ABroker):
         # TODO: test
         ib_currency = currency.value
         return ib_currency
-
-    # ----------------------------- Comparisons --------------------------------
-
-    def _are_loosely_equal(
-            self, loose: AContract, well_defined: AContract,
-    ) -> bool:
-        if loose == well_defined:
-            equal = True
-        else:
-            if not isinstance(loose, type(well_defined)):
-                equal = False
-            else:
-                if isinstance(loose, StockContract):
-                    equal = self._are_loosely_equal_stock(
-                        loose=loose, well_defined=well_defined,
-                    )
-                elif isinstance(loose, OptionContract):
-                    equal = self._are_loosely_equal_option(
-                        loose=loose, well_defined=well_defined,
-                    )
-                elif isinstance(loose, ForexContract):
-                    equal = self._are_loosely_equal_forex(
-                        loose=loose, well_defined=well_defined,
-                    )
-                else:
-                    raise TypeError(
-                        f"Unrecognized contract type {type(loose)}."
-                    )
-
-        return equal
-
-    def _are_loosely_equal_stock(
-            self, loose: StockContract, well_defined: StockContract,
-    ) -> bool:
-        equal = self._compare_a_contract_loose(
-            loose=loose, well_defined=well_defined,
-        )
-        return equal
-
-    def _are_loosely_equal_option(
-            self, loose: OptionContract, well_defined: OptionContract,
-    ) -> bool:
-        equal = True
-        a_comparison = self._compare_a_contract_loose(
-            loose=loose, well_defined=well_defined,
-        )
-
-        if not a_comparison:
-            equal = False
-        elif loose.strike != well_defined.strike:
-            equal = False
-        elif loose.right != well_defined.right:
-            equal = False
-        elif loose.multiplier != well_defined.multiplier:
-            equal = False
-        elif loose.last_trade_date != well_defined.last_trade_date:
-            equal = False
-
-        return equal
-
-    def _are_loosely_equal_forex(
-            self, loose: ForexContract, well_defined: ForexContract,
-    ) -> bool:
-        equal = self._compare_a_contract_loose(
-            loose=loose, well_defined=well_defined,
-        )
-        return equal
-
-    @staticmethod
-    def _compare_a_contract_loose(
-            loose: AContract, well_defined: AContract,
-    ) -> bool:
-        equal = True
-
-        if loose.symbol != well_defined.symbol:
-            equal = False
-        elif loose.con_id is not None and loose.con_id != well_defined.con_id:
-            equal = False
-        elif (
-                loose.exchange is not None
-                and loose.exchange != well_defined.exchange
-        ):
-            equal = False
-        elif (
-                loose.currency is not None
-                and loose.currency != well_defined.currency
-        ):
-            equal = False
-
-        return equal

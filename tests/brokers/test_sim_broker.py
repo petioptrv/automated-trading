@@ -12,6 +12,7 @@ from algotradepy.brokers.sim_broker import (
 from algotradepy.contracts import StockContract, PriceType
 from algotradepy.historical.loaders import HistoricalRetriever
 from algotradepy.orders import MarketOrder, OrderAction
+from algotradepy.trade import Trade
 from tests.conftest import TEST_DATA_DIR
 
 
@@ -196,9 +197,10 @@ def test_simulation_broker_buy(sim_broker_15m, spy_stock_contract):
 
     contract = StockContract(symbol="SPY")
     order = MarketOrder(action=OrderAction.BUY, quantity=1)
+    trade = Trade(contract=contract, order=order)
 
-    broker._clock.tick()  # TODO: remove use of implementation details
-    broker.place_trade(contract=contract, order=order)
+    broker.run_sim(step_count=1)
+    broker.place_trade(trade=trade, order=order)
 
     spy_2020_4_6_9_45_open = 257.78
 
@@ -206,16 +208,17 @@ def test_simulation_broker_buy(sim_broker_15m, spy_stock_contract):
     assert broker.get_position(contract=spy_stock_contract) == 1
 
 
-def test_simulation_broker_sell(sim_broker_15m):
+def test_simulation_broker_sell(sim_broker_15m, spy_stock_contract):
     broker = sim_broker_15m
 
     assert broker.get_position(contract=spy_stock_contract) == 0
 
     contract = StockContract(symbol="SPY")
     order = MarketOrder(action=OrderAction.SELL, quantity=1)
+    trade = Trade(contract=contract, order=order)
 
-    broker._clock.tick()  # TODO: remove use of implementation details
-    broker.place_trade(contract=contract, order=order)
+    broker.run_sim(step_count=1)
+    broker.place_trade(trade=trade, order=order)
 
     spy_2020_4_6_9_30_close = 257.77
 
@@ -250,8 +253,9 @@ def test_simulation_broker_register_same_bar_size(sim_broker_15m):
         end_date=date(2020, 4, 7),
         bar_size=timedelta(minutes=15),
     )
+    contract = StockContract(symbol="SPY")
     sim_broker_15m.subscribe_to_bars(
-        symbol="SPY", bar_size=timedelta(minutes=15), func=checker.step,
+        contract=contract, bar_size=timedelta(minutes=15), func=checker.step,
     )
     sim_broker_15m.run_sim()
     checker.assert_all_received()
@@ -263,8 +267,9 @@ def test_simulation_broker_register_diff_bar_size(sim_broker_15m):
         end_date=date(2020, 4, 7),
         bar_size=timedelta(minutes=30),
     )
+    contract = StockContract(symbol="SPY")
     sim_broker_15m.subscribe_to_bars(
-        symbol="SPY", bar_size=timedelta(minutes=30), func=checker.step,
+        contract=contract, bar_size=timedelta(minutes=30), func=checker.step,
     )
     sim_broker_15m.run_sim()
     checker.assert_all_received()
@@ -276,8 +281,9 @@ def test_simulation_broker_register_daily(sim_broker_15m):
         end_date=date(2020, 4, 7),
         bar_size=timedelta(days=1),
     )
+    contract = StockContract(symbol="SPY")
     sim_broker_15m.subscribe_to_bars(
-        symbol="SPY", bar_size=timedelta(days=1), func=checker.step,
+        contract=contract, bar_size=timedelta(days=1), func=checker.step,
     )
     sim_broker_15m.run_sim()
     checker.assert_all_received()
@@ -312,15 +318,15 @@ def test_simulation_broker_register_tick_single_symbol(
     ask_prices = []
     bid_prices = []
 
-    def mkt_receiver(contract, price):
+    def mkt_receiver(_, price):
         nonlocal mkt_prices
         mkt_prices.append(price)
 
-    def ask_receiver(contract, price):
+    def ask_receiver(_, price):
         nonlocal ask_prices
         ask_prices.append(price)
 
-    def bid_receiver(contract, price):
+    def bid_receiver(_, price):
         nonlocal bid_prices
         bid_prices.append(price)
 
@@ -420,6 +426,7 @@ def test_cancel_tick_data(
 def test_tick_data_delivery_order(
     sim_broker_1s, spy_stock_contract, schw_stock_contract,
 ):
+    # TODO: fix
     spy_ask = []
     schw_ask = []
 

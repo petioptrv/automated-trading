@@ -151,6 +151,7 @@ class HistoricalRetriever:
         data : pd.DataFrame
             The requested historical data.
         """
+        # TODO: refactor to use contract
         if end_date == date.today():
             end_date -= timedelta(days=1)
 

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import Callable, Optional, Dict, Tuple
+from typing import Callable, Optional, Dict, Tuple, List
 
 from algotradepy.contracts import AContract, PriceType
 from algotradepy.orders import AnOrder
@@ -33,19 +33,36 @@ class ABroker(ABC):
         self._simulation = simulation
 
     @property
+    @abstractmethod
     def acc_cash(self) -> float:
         """The total funds available across all accounts."""
         raise NotImplementedError
 
     @property
+    @abstractmethod
     def datetime(self) -> datetime:
         """Server date and time."""
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def trades(self) -> List[Trade]:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def open_trades(self) -> List[Trade]:
         raise NotImplementedError
 
     @abstractmethod
     def __del__(self):
         raise NotImplementedError
 
+    @abstractmethod
+    def sleep(self, secs: float):
+        raise NotImplementedError
+
+    @abstractmethod
     def subscribe_to_new_trades(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
@@ -64,6 +81,7 @@ class ABroker(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def subscribe_to_trade_updates(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
@@ -80,9 +98,10 @@ class ABroker(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def subscribe_to_bars(
         self,
-        symbol: str,
+        contract: AContract,
         bar_size: timedelta,
         func: Callable,
         fn_kwargs: Optional[dict] = None,
@@ -93,8 +112,8 @@ class ABroker(ABC):
 
         Parameters
         ----------
-        symbol : str
-            The symbol for which to request historical data.
+        contract : AContract
+            The contract for which to request historical data.
         bar_size : timedelta
             The bar size to request.
         func : Callable
@@ -103,9 +122,9 @@ class ABroker(ABC):
             Keyword arguments to feed to the callback function along with the
             bars.
         """
-        # TODO: use contract
         raise NotImplementedError
 
+    @abstractmethod
     def subscribe_to_tick_data(
         self,
         contract: AContract,
@@ -130,6 +149,7 @@ class ABroker(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def cancel_tick_data(self, contract: AContract, func: Callable):
         """Cancel tick updates.
 
@@ -142,6 +162,7 @@ class ABroker(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def place_trade(
         self, trade: Trade, *args, **kwargs
     ) -> Tuple[bool, Trade]:
@@ -159,6 +180,11 @@ class ABroker(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def cancel_trade(self, trade: Trade):
+        raise NotImplementedError
+
+    @abstractmethod
     def get_position(self, contract: AContract, *args, **kwargs) -> float:
         """Request the currently held position for a given symbol.
 
@@ -173,6 +199,7 @@ class ABroker(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_transaction_fee(self) -> float:
         """Request the broker transaction cost.
 

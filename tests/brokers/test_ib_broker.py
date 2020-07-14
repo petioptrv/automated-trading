@@ -1,11 +1,16 @@
 import time
 from collections import OrderedDict
-from typing import Optional
 
 import numpy as np
 import pytest
 
-from algotradepy.contracts import AContract, StockContract, Exchange, Currency
+from algotradepy.contracts import (
+    AContract,
+    StockContract,
+    Exchange,
+    Currency,
+    ForexContract, PriceType,
+)
 from algotradepy.orders import (
     AnOrder,
     LimitOrder,
@@ -206,70 +211,6 @@ def spy_stock_contract():
     return contract
 
 
-def test_get_position_non_master_id_raises(
-    non_master_broker, spy_stock_contract,
-):
-    with pytest.raises(AttributeError):
-        non_master_broker.get_position(contract=spy_stock_contract)
-
-    increment_tests_passed()
-
-
-def test_get_position(
-    master_broker,
-    spy_stock_contract,
-    non_master_ib_test_broker,
-    ib_stk_contract_spy,
-    ib_mkt_buy_order_1,
-    ib_mkt_sell_order_1,
-):
-    from algotradepy.connectors.ib_connector import SERVER_BUFFER_TIME
-
-    initial_position = master_broker.get_position(contract=spy_stock_contract)
-
-    trade = non_master_ib_test_broker.placeOrder(
-        contract=ib_stk_contract_spy,
-        order=ib_mkt_buy_order_1,
-    )
-
-    while trade.isActive() and not trade.isDone():
-        non_master_ib_test_broker.sleep(SERVER_BUFFER_TIME)
-
-    spy_position = master_broker.get_position(contract=spy_stock_contract)
-
-    assert spy_position == initial_position + 1
-
-    trade = non_master_ib_test_broker.placeOrder(
-        contract=ib_stk_contract_spy,
-        order=ib_mkt_sell_order_1,
-    )
-
-    while trade.isActive() and not trade.isDone():
-        non_master_ib_test_broker.sleep(SERVER_BUFFER_TIME)
-
-    spy_position = master_broker.get_position(contract=spy_stock_contract)
-
-    assert spy_position == initial_position
-
-    increment_tests_passed()
-
-
-@pytest.mark.parametrize("action", [OrderAction.BUY, OrderAction.SELL])
-def test_limit_order(
-    non_master_ib_test_broker, master_broker, action,
-):
-    non_master_ib_test_broker.reqGlobalCancel()
-
-    contract = StockContract(symbol="SPY")
-    order = LimitOrder(action=action, quantity=1, limit_price=20)
-    trade = Trade(contract=contract, order=order)
-    placed, _ = master_broker.place_trade(trade=trade, await_confirm=True)
-
-    assert isinstance(placed, bool)
-
-    increment_tests_passed()
-
-
 def test_subscribe_to_new_trades_non_master_raises(non_master_broker):
     def dummy_fn(*_, **__):
         pass
@@ -281,11 +222,11 @@ def test_subscribe_to_new_trades_non_master_raises(non_master_broker):
 
 
 def test_subscribe_to_new_tws_trades(
-    master_broker,
-    non_master_ib_test_broker,
-    ib_stk_contract_spy,
-    ib_mkt_buy_order_1,
-    ib_lmt_sell_order_2_1000,
+        master_broker,
+        non_master_ib_test_broker,
+        ib_stk_contract_spy,
+        ib_mkt_buy_order_1,
+        ib_lmt_sell_order_2_1000,
 ):
     already_logged = []
     open_orders = OrderedDict()
@@ -363,10 +304,10 @@ def test_subscribe_to_trade_updates_non_master_raises(non_master_broker):
 
 
 def test_subscribe_to_tws_trade_updates(
-    master_broker,
-    non_master_ib_test_broker,
-    ib_stk_contract_spy,
-    ib_mkt_buy_order_1,
+        master_broker,
+        non_master_ib_test_broker,
+        ib_stk_contract_spy,
+        ib_mkt_buy_order_1,
 ):
     open_orders = OrderedDict()
 
@@ -401,60 +342,266 @@ def request_manual_input(msg):
     messagebox.showwarning(title="Manual Input Request", message=msg)
 
 
-# def test_order_cancel(master_broker):
-#     open_orders = OrderedDict()
-#     cancel_received = False
-#
-#     def log_cancelled_order(status_: TradeStatus):
-#         nonlocal cancel_received
-#
-#         order_id = status_.order_id
-#         if status_.state == "Cancelled" and order_id in open_orders:
-#             open_orders[order_id] = status_
-#
-#         cancel_received = True
-#
-#     order_received = False
-#
-#     def maybe_cancel_order(contract_: AContract, order_: AnOrder):
-#         nonlocal order_received
-#
-#         if (
-#             contract_.symbol == "SPY"
-#             and isinstance(order_, LimitOrder)
-#             and order_.action == OrderAction.BUY
-#             and order_.quantity == 1
-#             and order_.limit_price == 10
-#         ):
-#             open_orders[order_.order_id] = None
-#             master_broker.cancel_trade(order_id=order_.order_id)
-#             order_received = True
-#
-#     master_broker.subscribe_to_trade_updates(func=log_cancelled_order)
-#     master_broker.subscribe_to_new_trades(func=maybe_cancel_order)
-#
-#     request_manual_input(
-#         msg="Place a SPY limit buy order of 1 share at $10"
-#         " in TWS and close this window.\nIf your order doesn't get"
-#         " immediately cancelled, this test has failed (close window"
-#         " regardless)."
-#     )
-#
-#     t0 = t1 = time.time()
-#     while t1 - t0 <= AWAIT_TIME_OUT and (
-#         not order_received or not cancel_received
-#     ):
-#         master_broker.sleep()
-#         t1 = time.time()
-#
-#     assert len(open_orders) == 1
-#
-#     item = open_orders.popitem()
-#     status: TradeStatus = item[1]
-#
-#     assert status.state == "Cancelled"
-#
-#     increment_tests_passed()
+def test_get_position_non_master_id_raises(
+    non_master_broker, spy_stock_contract,
+):
+    with pytest.raises(AttributeError):
+        non_master_broker.get_position(contract=spy_stock_contract)
+
+    increment_tests_passed()
+
+
+def test_get_position(
+    master_broker,
+    spy_stock_contract,
+    non_master_ib_test_broker,
+    ib_stk_contract_spy,
+    ib_mkt_buy_order_1,
+    ib_mkt_sell_order_1,
+):
+    from algotradepy.connectors.ib_connector import SERVER_BUFFER_TIME
+
+    initial_position = master_broker.get_position(contract=spy_stock_contract)
+
+    trade = non_master_ib_test_broker.placeOrder(
+        contract=ib_stk_contract_spy,
+        order=ib_mkt_buy_order_1,
+    )
+
+    while trade.isActive() and not trade.isDone():
+        non_master_ib_test_broker.sleep(SERVER_BUFFER_TIME)
+
+    spy_position = master_broker.get_position(contract=spy_stock_contract)
+
+    assert spy_position == initial_position + 1
+
+    trade = non_master_ib_test_broker.placeOrder(
+        contract=ib_stk_contract_spy,
+        order=ib_mkt_sell_order_1,
+    )
+
+    while trade.isActive() and not trade.isDone():
+        non_master_ib_test_broker.sleep(SERVER_BUFFER_TIME)
+
+    spy_position = master_broker.get_position(contract=spy_stock_contract)
+
+    assert spy_position == initial_position
+
+    increment_tests_passed()
+
+
+def test_place_limit_order(master_ib_test_broker, non_master_broker):
+    master_ib_test_broker.reqGlobalCancel()
+    ib_trade = None
+
+    def trade_receiver(trade_):
+        nonlocal ib_trade
+        ib_trade = trade_
+
+    master_ib_test_broker.openOrderEvent += trade_receiver
+
+    contract = StockContract(symbol="SPY")
+    order = LimitOrder(action=OrderAction.BUY, quantity=1, limit_price=20)
+    trade = Trade(contract=contract, order=order)
+    placed, _ = non_master_broker.place_trade(trade=trade, await_confirm=True)
+
+    assert isinstance(placed, bool)
+
+    t0 = time.time()
+    while ib_trade is None and time.time() - t0 <= AWAIT_TIME_OUT:
+        non_master_broker.sleep()
+
+    assert ib_trade.contract.symbol == "SPY"
+    assert ib_trade.order.orderType == "LMT"
+    assert ib_trade.order.totalQuantity == 1
+    assert ib_trade.order.action == "BUY"
+    assert ib_trade.order.lmtPrice == 20
+
+    increment_tests_passed()
+
+
+def test_receive_limit_order(non_master_ib_test_broker, master_broker):
+    from ib_insync.order import LimitOrder as IBLimitOrder
+    from ib_insync.contract import Stock as IBStock
+
+    trade: Trade = None
+
+    def trade_receiver(trade_):
+        nonlocal trade
+        trade = trade_
+
+    master_broker.subscribe_to_new_trades(func=trade_receiver)
+
+    contract = IBStock(symbol="SPY", exchange="SMART", currency="USD")
+    order = IBLimitOrder(action="BUY", totalQuantity=1, lmtPrice=10)
+    non_master_ib_test_broker.placeOrder(contract=contract, order=order)
+
+    t0 = time.time()
+    while trade is None and time.time() - t0 <= AWAIT_TIME_OUT:
+        master_broker.sleep()
+
+    assert trade.contract.symbol == "SPY"
+    assert isinstance(trade.order, LimitOrder)
+    assert trade.order.quantity == 1
+    assert trade.order.action == OrderAction.BUY
+    assert trade.order.limit_price == 10
+
+    increment_tests_passed()
+
+
+@pytest.mark.parametrize(
+    "aux_price,trailing_percent", [(5, None), (None, 5)]
+)
+def test_place_trailing_stop_order(
+        aux_price, trailing_percent, master_ib_test_broker, non_master_broker,
+):
+    from ib_insync.util import UNSET_DOUBLE
+
+    master_ib_test_broker.reqGlobalCancel()
+    ib_trade = None
+
+    def trade_receiver(trade_):
+        nonlocal ib_trade
+        ib_trade = trade_
+
+    master_ib_test_broker.openOrderEvent += trade_receiver
+
+    contract = StockContract(symbol="SPY")
+    order = TrailingStopOrder(
+        action=OrderAction.BUY,
+        quantity=1,
+        trail_stop_price=10,
+        aux_price=aux_price,
+        trail_percent=trailing_percent,
+    )
+    trade = Trade(contract=contract, order=order)
+    placed, _ = non_master_broker.place_trade(trade=trade, await_confirm=True)
+
+    assert isinstance(placed, bool)
+
+    t0 = time.time()
+    while ib_trade is None and time.time() - t0 <= AWAIT_TIME_OUT:
+        non_master_broker.sleep()
+
+    assert ib_trade.contract.symbol == "SPY"
+    assert ib_trade.order.orderType == "TRAIL"
+    assert ib_trade.order.totalQuantity == 1
+    assert ib_trade.order.action == "BUY"
+    assert ib_trade.order.trailStopPrice == 10
+    if aux_price is not None:
+        assert ib_trade.order.auxPrice == aux_price
+    else:
+        assert ib_trade.order.auxPrice == UNSET_DOUBLE
+    if trailing_percent is not None:
+        assert ib_trade.order.trailingPercent == trailing_percent
+    else:
+        assert ib_trade.order.trailingPercent == UNSET_DOUBLE
+
+    increment_tests_passed()
+
+
+@pytest.mark.parametrize(
+    "aux_price,trailing_percent", [(5, None), (None, 5)]
+)
+def test_receive_trailing_stop_order(
+        aux_price, trailing_percent, non_master_ib_test_broker, master_broker,
+):
+    from ib_insync.util import UNSET_DOUBLE
+    from ib_insync.order import Order as IBorder
+    from ib_insync.contract import Stock as IBStock
+
+    trade: Trade = None
+
+    def trade_receiver(trade_):
+        nonlocal trade
+        trade = trade_
+
+    master_broker.subscribe_to_new_trades(func=trade_receiver)
+
+    contract = IBStock(symbol="SPY", exchange="SMART", currency="USD")
+    order = IBorder(
+        orderType="TRAIL",
+        action="BUY",
+        totalQuantity=1,
+        trailStopPrice=10,
+        auxPrice=aux_price or UNSET_DOUBLE,
+        trailingPercent=trailing_percent or UNSET_DOUBLE,
+    )
+    non_master_ib_test_broker.placeOrder(contract=contract, order=order)
+
+    t0 = time.time()
+    while trade is None and time.time() - t0 <= AWAIT_TIME_OUT:
+        master_broker.sleep()
+
+    assert trade.contract.symbol == "SPY"
+    assert isinstance(trade.order, TrailingStopOrder)
+    assert trade.order.quantity == 1
+    assert trade.order.action == OrderAction.BUY
+    assert trade.order.trail_stop_price == 10
+    assert trade.order.aux_price == aux_price
+    assert trade.order.trail_percent == trailing_percent
+
+    increment_tests_passed()
+
+
+def test_place_forex_order(master_ib_test_broker, non_master_broker):
+    master_ib_test_broker.reqGlobalCancel()
+    ib_trade = None
+
+    def trade_receiver(trade_):
+        nonlocal ib_trade
+        ib_trade = trade_
+
+    master_ib_test_broker.openOrderEvent += trade_receiver
+
+    contract = ForexContract(symbol="EUR", currency=Currency.USD)
+    order = LimitOrder(action=OrderAction.BUY, quantity=20000, limit_price=1)
+    trade = Trade(contract=contract, order=order)
+    placed, _ = non_master_broker.place_trade(trade=trade, await_confirm=True)
+
+    assert isinstance(placed, bool)
+
+    t0 = time.time()
+    while ib_trade is None and time.time() - t0 <= AWAIT_TIME_OUT:
+        non_master_broker.sleep()
+
+    assert ib_trade.contract.symbol == "EUR"
+    assert ib_trade.contract.secType == "CASH"
+    assert ib_trade.order.orderType == "LMT"
+    assert ib_trade.order.totalQuantity == 20000
+    assert ib_trade.order.action == "BUY"
+    assert ib_trade.order.lmtPrice == 1
+
+    increment_tests_passed()
+
+
+def test_receive_forex_order(non_master_ib_test_broker, master_broker):
+    from ib_insync.order import LimitOrder as IBLimitOrder
+    from ib_insync.contract import Forex as IBForex
+
+    trade: Trade = None
+
+    def trade_receiver(trade_):
+        nonlocal trade
+        trade = trade_
+
+    master_broker.subscribe_to_new_trades(func=trade_receiver)
+
+    contract = IBForex(pair="EURUSD")
+    order = IBLimitOrder(action="BUY", totalQuantity=20000, lmtPrice=1)
+    non_master_ib_test_broker.placeOrder(contract=contract, order=order)
+
+    t0 = time.time()
+    while trade is None and time.time() - t0 <= AWAIT_TIME_OUT:
+        master_broker.sleep()
+
+    assert trade.contract.symbol == "EUR"
+    assert isinstance(trade.contract, ForexContract)
+    assert trade.order.quantity == 20000
+    assert trade.order.action == OrderAction.BUY
+    assert trade.order.limit_price == 1
+
+    increment_tests_passed()
 
 
 @pytest.mark.parametrize(
@@ -495,43 +642,89 @@ def test_exchanges_and_currencies(
     increment_tests_passed()
 
 
-def test_trailing_stop_order(master_broker, spy_stock_contract):
-    received_contract: Optional[AContract] = None
-    received_order: Optional[AnOrder] = None
+def test_subscribe_to_tick_data(master_broker):
+    con = None
+    ask = None
+    bid = None
+    mid = None
 
-    def order_receiver(trade_: Trade):
-        nonlocal received_order, received_contract
+    def update_ask(contract_, price_):
+        nonlocal con, ask
+        con = contract_
+        ask = price_
 
-        received_order = trade_.order
-        received_contract = trade_.contract
+    def update_bid(c, price_):
+        nonlocal bid
+        bid = price_
 
-    master_broker.subscribe_to_new_trades(func=order_receiver)
+    def update_mid(c, price_):
+        nonlocal mid
+        mid = price_
 
-    stop_order = TrailingStopOrder(
-        action=OrderAction.BUY,
-        quantity=1,
-        stop_price=30,
+    contract = StockContract(symbol="SPY")
+    master_broker.subscribe_to_tick_data(
+        contract=contract, func=update_ask, price_type=PriceType.ASK,
     )
-    trade = Trade(contract=spy_stock_contract, order=stop_order)
-    _, order_id = master_broker.place_trade(trade=trade, await_confirm=True)
+    master_broker.subscribe_to_tick_data(
+        contract=contract, func=update_bid, price_type=PriceType.BID,
+    )
+    master_broker.subscribe_to_tick_data(
+        contract=contract, func=update_mid, price_type=PriceType.MARKET,
+    )
 
-    t0 = t1 = time.time()
-    while t1 - t0 <= AWAIT_TIME_OUT and received_contract is None:
+    t0 = time.time()
+    while (
+            con is None
+            and ask is None
+            and bid is None
+            and mid is None
+            and time.time() - t0 <= AWAIT_TIME_OUT
+    ):
         master_broker.sleep()
-        t1 = time.time()
 
-    assert received_contract is not None
-    assert received_contract.symbol == "SPY"
-    assert isinstance(received_order, TrailingStopOrder)
-    assert received_order.action == OrderAction.BUY
-    assert received_order.stop_price == 30
+    assert con == contract
+    assert ask > bid
+    assert mid == (ask + bid) / 2
 
-    master_broker.cancel_trade(trade=trade)
+
+def test_cancel_tick_data(master_broker):
+    mid = None
+
+    def update_mid(c, price_):
+        nonlocal mid
+        mid = price_
+
+    contract = StockContract(symbol="SPY")
+    master_broker.subscribe_to_tick_data(
+        contract=contract, func=update_mid, price_type=PriceType.MARKET,
+    )
+
+    t0 = time.time()
+    while mid is None and time.time() - t0 <= AWAIT_TIME_OUT:
+        master_broker.sleep()
+
+    assert mid is not None
+
+    mid = None
+    t0 = time.time()
+    while mid is None and time.time() - t0 <= AWAIT_TIME_OUT:
+        master_broker.sleep()
+
+    assert mid is not None  # was refreshed
+
+    master_broker.cancel_tick_data(contract=contract, func=update_mid)
+    master_broker.sleep()
+    mid = None
+    t0 = time.time()
+    while mid is None and time.time() - t0 <= AWAIT_TIME_OUT:
+        master_broker.sleep()
+
+    assert mid is None  # did not refresh again
 
 
 def test_log_all_tests_passed_ts():
     global tests_passed
-    assert tests_passed == 27
+    assert tests_passed == 33
 
     ts_f_path = PROJECT_DIR / "test_scripts" / "test_ib_broker_ts.log"
 

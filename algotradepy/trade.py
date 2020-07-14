@@ -76,3 +76,13 @@ class Trade:
     @property
     def status(self) -> TradeStatus:
         return self._status
+
+    def __eq__(self, other) -> bool:
+        equal = True
+
+        if not isinstance(other, Trade):
+            equal = False
+        elif self.contract != other.contract or self.order != other.order:
+            equal = False
+
+        return equal

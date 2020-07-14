@@ -1,7 +1,6 @@
 from datetime import timedelta, date, time, datetime
 import time as real_time
 from typing import Callable, Optional, Dict, Tuple, List
-from itertools import repeat
 
 import pandas as pd
 
@@ -192,11 +191,14 @@ class SimulationBroker(ABroker):
             hist_retriever = HistoricalRetriever()
         self._hist_retriever = hist_retriever
         self._abs_fee = transaction_cost
+        # {bar_size: {contract: {func: fn_kwargs}}}
         self._bars_callback_table = {}
+        # {contract: {func: {"fn_kwargs": fn_kwargs, "price_type": price_type}}}
         self._tick_callback_table = {}
+        # {contract: pd.DataFrame}
         self._local_cache = {}
         self._hist_cache_only = None
-        self._valid_id = 0
+        self._valid_id = 1
         self._new_trade_subscribers = []
         self._trade_updates_subscribers = []
         self._placed_trades: List[Trade] = []
@@ -215,13 +217,6 @@ class SimulationBroker(ABroker):
 
     @property
     def open_trades(self) -> List[Trade]:
-        """Mostly used for testing.
-
-        Returns
-        -------
-        trades : list of tuples of int, AContract and AnOrder pairs
-            The currently active trades.
-        """
         done_statuses = [TradeState.CANCELLED, TradeState.FILLED]
         open_trades = []
         for trade in self._placed_trades:
@@ -233,9 +228,28 @@ class SimulationBroker(ABroker):
     def __del__(self):
         pass
 
+    def sleep(self, secs: float):
+        real_time.sleep(secs=secs)
+
+    def subscribe_to_new_trades(
+            self, func: Callable, fn_kwargs: Optional[Dict] = None,
+    ):
+        # TODO: test
+        if fn_kwargs is None:
+            fn_kwargs = {}
+        self._new_trade_subscribers.append((func, fn_kwargs))
+
+    def subscribe_to_trade_updates(
+            self, func: Callable, fn_kwargs: Optional[Dict] = None,
+    ):
+        # TODO: test
+        if fn_kwargs is None:
+            fn_kwargs = {}
+        self._trade_updates_subscribers.append((func, fn_kwargs))
+
     def subscribe_to_bars(
         self,
-        symbol: str,
+        contract: AContract,
         bar_size: timedelta,
         func: Callable,
         fn_kwargs: Optional[dict] = None,
@@ -250,26 +264,9 @@ class SimulationBroker(ABroker):
         if fn_kwargs is None:
             fn_kwargs = {}
 
-        # {bar_size: {symbol: {func: fn_kwargs}}}
         contract_dict = self._bars_callback_table.setdefault(bar_size, {})
-        callbacks = contract_dict.setdefault(symbol, {})
+        callbacks = contract_dict.setdefault(contract, {})
         callbacks[func] = fn_kwargs
-
-    def subscribe_to_new_trades(
-        self, func: Callable, fn_kwargs: Optional[Dict] = None,
-    ):
-        # TODO: test
-        if fn_kwargs is None:
-            fn_kwargs = {}
-        self._new_trade_subscribers.append((func, fn_kwargs))
-
-    def subscribe_to_trade_updates(
-        self, func: Callable, fn_kwargs: Optional[Dict] = None,
-    ):
-        # TODO: test
-        if fn_kwargs is None:
-            fn_kwargs = {}
-        self._trade_updates_subscribers.append((func, fn_kwargs))
 
     def subscribe_to_tick_data(
         self,
@@ -288,7 +285,6 @@ class SimulationBroker(ABroker):
         if fn_kwargs is None:
             fn_kwargs = {}
 
-        # {contract: {func: {"fn_kwargs": fn_kwargs, "price_type": price_type}}}
         callbacks = self._tick_callback_table.setdefault(contract, {})
         callbacks[func] = {"fn_kwargs": fn_kwargs, "price_type": price_type}
 
@@ -301,24 +297,54 @@ class SimulationBroker(ABroker):
                 del self._tick_callback_table[contract]
 
     def place_trade(self, trade: Trade, *args, **kwargs) -> Tuple[bool, Trade]:
-        # TODO: test for Limit and Stop Loss Orders
         trade_id = self._get_increment_valid_id()
-        trade.order._order_id = trade_id
-        self._placed_trades.append(trade)
+        order = trade.order
+        order._order_id = trade_id
+        new_status = TradeStatus(
+            state=TradeState.SUBMITTED,
+            filled=0,
+            remaining=order.quantity,
+            ave_fill_price=0,
+            order_id=trade_id,
+        )
+        new_trade = Trade(
+            contract=trade.contract,
+            order=order,
+            status=new_status,
+        )
+        self._placed_trades.append(new_trade)
+
+        self._update_trade_updates_subscribers(trade=new_trade)
 
         if isinstance(trade.order, MarketOrder):
             # TODO: This should be smarter... What if liquidity is low?
-            self._execute_trade(trade_id=trade_id)
-
-        self._update_trade_updates_subscribers(
-            trade_id=trade_id, state=TradeState.SUBMITTED,
-        )
+            # maybe should remove it and only use self.simulate_trade_execution
+            self._execute_trade(trade=trade)
 
         # update trade placed subscribers
         for func, fn_kwargs in self._new_trade_subscribers:
             func(trade, **fn_kwargs)
 
         return True, trade
+
+    def cancel_trade(self, trade: Trade):
+        # TODO: implement
+        cancelled_status = TradeStatus(
+            state=TradeState.CANCELLED,
+            filled=trade.status.filled,
+            remaining=trade.status.remaining,
+            ave_fill_price=trade.status.ave_fill_price,
+            order_id=trade.status.order_id,
+        )
+        new_trade = Trade(
+            contract=trade.contract,
+            order=trade.order,
+            status=cancelled_status,
+        )
+        trade_idx = self._placed_trades.index(trade)
+        self._placed_trades[trade_idx] = new_trade
+
+        self._update_trade_updates_subscribers(trade=trade)
 
     def get_position(self, contract: AContract, *args, **kwargs) -> float:
         symbol = contract.symbol
@@ -349,13 +375,14 @@ class SimulationBroker(ABroker):
 
     def simulate_trade_execution(
         self,
-        trade_id: int,
+        trade: Trade,
         price: Optional[float] = None,
         n_shares: Optional[float] = None,
     ):
         # TODO: test
+        # TODO: implement for Limit and Stop Loss Orders
         self._execute_trade(
-            trade_id=trade_id, price=price, n_shares=n_shares,
+            trade=trade, price=price, n_shares=n_shares,
         )
 
     def _get_increment_valid_id(self) -> int:
@@ -367,9 +394,7 @@ class SimulationBroker(ABroker):
         data = pd.DataFrame()
 
         for contract, _ in self._tick_callback_table.items():
-            symbol_data = self._get_tick_data(
-                contract=contract, bar_size=self._clock.time_step,
-            )
+            symbol_data = self._get_tick_data(contract=contract)
             data = data.append(symbol_data)
 
         data = data.sort_index(axis=0, level=1)
@@ -387,13 +412,11 @@ class SimulationBroker(ABroker):
                     price = (row["ask"] + row["bid"]) / 2
                 func(contract, price, **fn_dict["fn_kwargs"])
 
-    def _get_tick_data(
-        self, contract: AContract, bar_size: timedelta,
-    ) -> pd.DataFrame:
+    def _get_tick_data(self, contract: AContract) -> pd.DataFrame:
         curr_dt = self._clock.datetime
         next_dt = curr_dt + timedelta(seconds=1)
         symbol_data = self._get_data(
-            symbol=contract.symbol, bar_size=timedelta(0),
+            contract=contract, bar_size=timedelta(0),
         )
         symbol_data = symbol_data.loc[curr_dt:next_dt]
         ml_index = pd.MultiIndex.from_product([[contract], symbol_data.index])
@@ -422,18 +445,24 @@ class SimulationBroker(ABroker):
     def _update_bar_subscribers(
         self, bar_size: timedelta, contract_dict: dict
     ):
-        for symbol, callbacks in contract_dict.items():
-            bar = self._get_latest_time_entry(symbol=symbol, bar_size=bar_size)
+        for contract, callbacks in contract_dict.items():
+            bar = self._get_latest_time_entry(
+                contract=contract, bar_size=bar_size,
+            )
             for func, fn_kwargs in callbacks.items():
                 func(bar, **fn_kwargs)
 
     def _execute_trade(
         self,
-        trade_id: int,
+        trade: Trade,
         price: Optional[float] = None,
         n_shares: Optional[float] = None,
     ):
-        contract, order, filled = self._placed_trades[trade_id]
+        trade_idx = self._placed_trades.index(trade)
+        trade = self._placed_trades[trade_idx]
+        contract = trade.contract
+        order = trade.order
+        filled = trade.status.filled
 
         if n_shares is not None:
             assert n_shares <= order.quantity - filled
@@ -441,7 +470,7 @@ class SimulationBroker(ABroker):
             n_shares = order.quantity - filled
 
         if price is None:
-            price = self._get_current_price(symbol=contract.symbol)
+            price = self._get_current_price(contract=contract)
 
         if isinstance(order, LimitOrder):
             if order.action == OrderAction.BUY:
@@ -451,55 +480,55 @@ class SimulationBroker(ABroker):
 
         if order.action == OrderAction.BUY:
             self._cash -= n_shares * price + self.get_transaction_fee()
+            self._add_to_position(symbol=contract.symbol, n_shares=n_shares)
         else:
-            n_shares = -n_shares
             self._cash += n_shares * price + self.get_transaction_fee()
+            self._add_to_position(symbol=contract.symbol, n_shares=-n_shares)
 
-        self._add_to_position(symbol=contract.symbol, n_shares=n_shares)
-        filled += n_shares
-        self._placed_trades[trade_id][2] = filled
-        self._update_trade_updates_subscribers(
-            trade_id=trade_id, state=TradeState.FILLED, ave_fill_price=price,
+        filled = trade.status.filled
+        new_filled = filled + n_shares
+        ave_price = trade.status.ave_fill_price
+        new_ave_price = (ave_price * filled + price * n_shares) / new_filled
+        new_status = TradeStatus(
+            state=TradeState.FILLED,
+            filled=new_filled,
+            remaining=order.quantity - filled,
+            ave_fill_price=new_ave_price,
+            order_id=order.order_id,
         )
-        if filled == order.quantity:
-            self._remove_trade(trade_id=trade_id)
+        new_trade = Trade(
+            contract=contract,
+            order=order,
+            status=new_status,
+        )
+        self._placed_trades[trade_idx] = new_trade
+        self._update_trade_updates_subscribers(trade=trade)
 
     def _add_to_position(self, symbol: str, n_shares: float):
         symbol = symbol.upper()
         curr_pos = self._positions.setdefault(symbol, 0)
         self._positions[symbol] = curr_pos + n_shares
 
-    def _remove_trade(self, trade_id: int):
-        del self._placed_trades[trade_id]
-
-    def _update_trade_updates_subscribers(
-        self, trade_id: int, state: TradeState, ave_fill_price: float = 0
-    ):
-        _, order, filled = self._placed_trades[trade_id]
-        remaining = order.quantity - filled
-        status = TradeStatus(
-            order_id=trade_id,
-            state=state,
-            filled=filled,
-            remaining=remaining,
-            ave_fill_price=ave_fill_price,
-        )
+    def _update_trade_updates_subscribers(self, trade: Trade):
+        trade_idx = self._placed_trades.index(trade)
+        trade = self._placed_trades[trade_idx]
+        status = trade.status
 
         for func, fn_kwargs in self._trade_updates_subscribers:
             func(status, **fn_kwargs)
 
-    def _get_current_price(self, symbol: str) -> float:
+    def _get_current_price(self, contract: AContract) -> float:
         # TODO: use 1s aggregation of ticks, if available
         bar = self._get_next_bar(
-            symbol=symbol, bar_size=self._clock.time_step,
+            contract=contract, bar_size=self._clock.time_step,
         )
         price = bar["open"]
         return price
 
     def _get_latest_time_entry(
-        self, symbol: str, bar_size: timedelta
+        self, contract: AContract, bar_size: timedelta
     ) -> pd.Series:
-        bar_data = self._get_data(symbol=symbol, bar_size=bar_size,)
+        bar_data = self._get_data(contract=contract, bar_size=bar_size)
         curr_dt = self._clock.datetime
         if is_daily(bar_size=bar_size):
             bar = bar_data.loc[curr_dt.date()]
@@ -508,8 +537,10 @@ class SimulationBroker(ABroker):
             bar = bar_data.loc[curr_dt]
         return bar
 
-    def _get_next_bar(self, symbol: str, bar_size: timedelta) -> pd.Series:
-        bar_data = self._get_data(symbol=symbol, bar_size=bar_size,)
+    def _get_next_bar(
+            self, contract: AContract, bar_size: timedelta,
+    ) -> pd.Series:
+        bar_data = self._get_data(contract=contract, bar_size=bar_size)
         curr_dt = self._clock.datetime
         if is_daily(bar_size=bar_size):
             curr_dt += bar_size
@@ -520,18 +551,19 @@ class SimulationBroker(ABroker):
             bar = bar_data.loc[curr_dt]
         return bar
 
-    def _get_data(self, symbol: str, bar_size: timedelta) -> pd.DataFrame:
-        # TODO: change to using a contract
-        symbol_data = self._local_cache.get(symbol)
+    def _get_data(
+            self, contract: AContract, bar_size: timedelta,
+    ) -> pd.DataFrame:
+        symbol_data = self._local_cache.get(contract)
         if symbol_data is None:
             symbol_data = {}
-            self._local_cache[symbol] = symbol_data
+            self._local_cache[contract] = symbol_data
 
         bar_data = symbol_data.get(bar_size)
         if bar_data is None:
             end_date = get_next_trading_date(base_date=self._clock.end_date)
             bar_data = self._hist_retriever.retrieve_bar_data(
-                symbol=symbol,
+                symbol=contract.symbol,
                 bar_size=bar_size,
                 start_date=self._clock.start_date,
                 end_date=end_date,

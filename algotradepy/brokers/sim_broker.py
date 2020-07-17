@@ -225,9 +225,6 @@ class SimulationBroker(ABroker):
 
         return open_trades
 
-    def __del__(self):
-        pass
-
     def sleep(self, secs: float):
         real_time.sleep(secs=secs)
 

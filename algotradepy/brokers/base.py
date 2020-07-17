@@ -55,10 +55,6 @@ class ABroker(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def __del__(self):
-        raise NotImplementedError
-
-    @abstractmethod
     def sleep(self, secs: float):
         raise NotImplementedError
 

@@ -15,7 +15,7 @@ class PriceType(Enum):
 class Exchange(Enum):
     # North America
     NYSE = "NYSE"
-    NASDAQ = "NASDAQ"
+    NASDAQ = "NASDAQ"  # IB's ISLAND
     AMEX = "AMEX"
     ARCA = "ARCA"
     TSE = "TSE"

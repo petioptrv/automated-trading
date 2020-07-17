@@ -124,11 +124,6 @@ class IBBroker(ABroker):
         self._price_subscriptions: Optional[Dict] = None
         self._market_data_type_set = False
 
-    def __del__(self):
-        # TODO: see if we cancel all active trades placed by this broker...
-        self._cancel_all_price_subscriptions()
-        self._ib_conn.disconnect()
-
     @property
     def acc_cash(self) -> float:
         acc_summary = self._ib_conn.accountSummary()

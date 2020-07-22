@@ -5,8 +5,12 @@ import pandas as pd
 import numpy as np
 import pytest
 
+from algotradepy.contracts import StockContract
 from algotradepy.historical.loaders import HistoricalRetriever
-from algotradepy.historical.providers import YahooProvider, IEXProvider
+from algotradepy.historical.historical_providers import (
+    YahooHistoricalProvider,
+    IEXHistoricalProvider,
+)
 from algotradepy.historical.transformers import HistoricalAggregator
 from algotradepy.time_utils import generate_trading_days
 from tests.conftest import TEST_DATA_DIR
@@ -52,8 +56,9 @@ def test_retriever_cached_tick():
     end_date = date(2020, 6, 19)
 
     retriever = HistoricalRetriever(hist_data_dir=TEST_DATA_DIR)
+    contract = StockContract(symbol="SCHW")
     data = retriever.retrieve_bar_data(
-        symbol="SCHW",
+        contract=contract,
         start_date=start_date,
         end_date=end_date,
         bar_size=timedelta(0),
@@ -70,8 +75,9 @@ def test_retriever_cached_daily():
     end_date = date(2020, 4, 2)
 
     retriever = HistoricalRetriever(hist_data_dir=TEST_DATA_DIR)
+    contract = StockContract(symbol="SPY")
     data = retriever.retrieve_bar_data(
-        symbol="SPY",
+        contract=contract,
         start_date=start_date,
         end_date=end_date,
         bar_size=timedelta(days=1),
@@ -84,8 +90,8 @@ def test_retriever_cached_daily():
 
 
 HIST_PROVIDERS = [
-    YahooProvider(),
-    IEXProvider(
+    YahooHistoricalProvider(),
+    IEXHistoricalProvider(
         api_token="Tpk_98c62e8146894c4985dfb98034d7ac87"
     ),  # todo: remove simulation token
 ]
@@ -97,8 +103,9 @@ def test_retrieve_non_cached_daily(tmpdir, provider):
     end_date = date(2020, 4, 2)
 
     retriever = HistoricalRetriever(provider=provider, hist_data_dir=tmpdir,)
+    contract = StockContract(symbol="SPY")
     data = retriever.retrieve_bar_data(
-        symbol="SPY",
+        contract=contract,
         start_date=start_date,
         end_date=end_date,
         bar_size=timedelta(days=1),
@@ -113,8 +120,9 @@ def test_retrieve_non_cached_intraday(tmpdir, provider):
     end_date = date.today() - timedelta(days=1)
 
     retriever = HistoricalRetriever(provider=provider, hist_data_dir=tmpdir,)
+    contract = StockContract(symbol="SPY")
     data = retriever.retrieve_bar_data(
-        symbol="SPY",
+        contract=contract,
         start_date=start_date,
         end_date=end_date,
         bar_size=timedelta(minutes=1),
@@ -131,8 +139,9 @@ def test_retrieving_intermittently_cached_daily(tmpdir, provider):
     start_date = date(2020, 3, 3)
     end_date = date(2020, 3, 3)
 
+    contract = StockContract(symbol="SPY")
     retriever.retrieve_bar_data(
-        symbol="SPY",
+        contract=contract,
         start_date=start_date,
         end_date=end_date,
         bar_size=timedelta(days=1),
@@ -142,7 +151,7 @@ def test_retrieving_intermittently_cached_daily(tmpdir, provider):
     end_date = date(2020, 3, 5)
 
     retriever.retrieve_bar_data(
-        symbol="SPY",
+        contract=contract,
         start_date=start_date,
         end_date=end_date,
         bar_size=timedelta(days=1),
@@ -152,7 +161,7 @@ def test_retrieving_intermittently_cached_daily(tmpdir, provider):
     end_date = date(2020, 3, 6)
 
     data = retriever.retrieve_bar_data(
-        symbol="SPY",
+        contract=contract,
         start_date=start_date,
         end_date=end_date,
         bar_size=timedelta(days=1),
@@ -179,8 +188,9 @@ def test_retrieving_intermittently_cached_intraday(tmpdir, provider):
         start_date = date_range[0]
         end_date = date_range[-1]
 
+        contract = StockContract(symbol="SPY")
         data = retriever.retrieve_bar_data(
-            symbol="SPY",
+            contract=contract,
             start_date=start_date,
             end_date=end_date,
             bar_size=timedelta(days=1),
@@ -194,8 +204,9 @@ def test_historical_bar_aggregator():
     end_date = date(2020, 4, 7)
 
     retriever = HistoricalRetriever(hist_data_dir=TEST_DATA_DIR)
+    contract = StockContract(symbol="SPY")
     base_data = retriever.retrieve_bar_data(
-        symbol="SPY",
+        contract=contract,
         start_date=start_date,
         end_date=end_date,
         bar_size=timedelta(minutes=1),
@@ -204,7 +215,7 @@ def test_historical_bar_aggregator():
 
     aggregator = HistoricalAggregator(hist_data_dir=TEST_DATA_DIR)
     agg_data = aggregator.aggregate_data(
-        symbol="SPY",
+        contract=contract,
         start_date=start_date,
         end_date=end_date,
         base_bar_size=timedelta(minutes=1),
@@ -219,7 +230,7 @@ def test_historical_bar_aggregator():
     assert agg_data.iloc[0]["volume"] == base_data.iloc[:5]["volume"].sum()
 
     agg_data = aggregator.aggregate_data(
-        symbol="SPY",
+        contract=contract,
         start_date=start_date,
         end_date=end_date,
         base_bar_size=timedelta(minutes=1),

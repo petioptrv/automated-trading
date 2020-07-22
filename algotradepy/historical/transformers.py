@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from algotradepy.contracts import AContract
 from algotradepy.historical.loaders import HistCacheHandler
 from algotradepy.historical.hist_utils import HIST_DATA_DIR
 
@@ -13,7 +14,7 @@ class HistoricalAggregator:
 
     def aggregate_data(
         self,
-        symbol: str,
+        contract: AContract,
         start_date: date,
         end_date: date,
         base_bar_size: timedelta,
@@ -26,7 +27,7 @@ class HistoricalAggregator:
             )
 
         data = self._cache_handler.get_cached_data(
-            symbol=symbol,
+            contract=contract,
             start_date=start_date,
             end_date=end_date,
             bar_size=base_bar_size,
@@ -46,7 +47,7 @@ class HistoricalAggregator:
         data.index = data.index.droplevel(0)
 
         self._cache_handler.cache_data(
-            data=data, symbol=symbol, bar_size=target_bar_size,
+            data=data, contract=contract, bar_size=target_bar_size,
         )
 
         return data

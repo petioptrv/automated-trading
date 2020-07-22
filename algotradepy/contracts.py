@@ -13,6 +13,8 @@ class PriceType(Enum):
 
 
 class Exchange(Enum):
+    SMART = "SMART"
+
     # North America
     NYSE = "NYSE"
     NASDAQ = "NASDAQ"  # IB's ISLAND
@@ -62,11 +64,11 @@ class Right(Enum):
 
 class AContract(ABC, ReprAble, Comparable):
     def __init__(
-            self,
-            symbol: str,
-            con_id: Optional[int] = None,
-            exchange: Optional[Exchange] = None,
-            currency: Currency = Currency.USD,
+        self,
+        symbol: str,
+        con_id: Optional[int] = None,
+        exchange: Exchange = Exchange.SMART,
+        currency: Currency = Currency.USD,
     ):
         super().__init__()
         self._con_id = con_id
@@ -103,11 +105,11 @@ class AContract(ABC, ReprAble, Comparable):
 
 class StockContract(AContract):
     def __init__(
-            self,
-            symbol: str,
-            con_id: Optional[int] = None,
-            exchange: Optional[Exchange] = None,
-            currency: Currency = Currency.USD,
+        self,
+        symbol: str,
+        con_id: Optional[int] = None,
+        exchange: Optional[Exchange] = None,
+        currency: Currency = Currency.USD,
     ):
         super().__init__(
             con_id=con_id, symbol=symbol, exchange=exchange, currency=currency,
@@ -117,15 +119,15 @@ class StockContract(AContract):
 class OptionContract(AContract):
     # TODO: test; todo after getting option chain...
     def __init__(
-            self,
-            symbol: str,
-            strike: float,
-            right: Right,
-            multiplier: float,
-            last_trade_date: date,
-            con_id: Optional[int] = None,
-            exchange: Optional[Exchange] = None,
-            currency: Currency = Currency.USD,
+        self,
+        symbol: str,
+        strike: float,
+        right: Right,
+        multiplier: float,
+        last_trade_date: date,
+        con_id: Optional[int] = None,
+        exchange: Optional[Exchange] = None,
+        currency: Currency = Currency.USD,
     ):
         super().__init__(
             con_id=con_id, symbol=symbol, exchange=exchange, currency=currency
@@ -154,11 +156,11 @@ class OptionContract(AContract):
 
 class ForexContract(AContract):
     def __init__(
-            self,
-            symbol: str,
-            con_id: Optional[int] = None,
-            exchange: Optional[Exchange] = Exchange.FOREX,
-            currency: Currency = Currency.USD,
+        self,
+        symbol: str,
+        con_id: Optional[int] = None,
+        exchange: Optional[Exchange] = Exchange.FOREX,
+        currency: Currency = Currency.USD,
     ):
         super().__init__(
             con_id=con_id, symbol=symbol, exchange=exchange, currency=currency
@@ -166,7 +168,7 @@ class ForexContract(AContract):
 
 
 def are_loosely_equal_contracts(
-        loose: AContract, well_defined: AContract,
+    loose: AContract, well_defined: AContract,
 ) -> bool:
     """Used to compare a loosely- and a well-defined contract.
 
@@ -199,15 +201,13 @@ def are_loosely_equal_contracts(
                     loose=loose, well_defined=well_defined,
                 )
             else:
-                raise TypeError(
-                    f"Unrecognized contract type {type(loose)}."
-                )
+                raise TypeError(f"Unrecognized contract type {type(loose)}.")
 
     return equal
 
 
 def _are_loosely_equal_stock(
-        loose: StockContract, well_defined: StockContract,
+    loose: StockContract, well_defined: StockContract,
 ) -> bool:
     equal = _are_loosely_equal_a_contract(
         loose=loose, well_defined=well_defined,
@@ -216,7 +216,7 @@ def _are_loosely_equal_stock(
 
 
 def _are_loosely_equal_option(
-        loose: OptionContract, well_defined: OptionContract,
+    loose: OptionContract, well_defined: OptionContract,
 ) -> bool:
     equal = True
     a_comparison = _are_loosely_equal_a_contract(
@@ -238,7 +238,7 @@ def _are_loosely_equal_option(
 
 
 def _are_loosely_equal_forex(
-        loose: ForexContract, well_defined: ForexContract,
+    loose: ForexContract, well_defined: ForexContract,
 ) -> bool:
     equal = _are_loosely_equal_a_contract(
         loose=loose, well_defined=well_defined,
@@ -247,7 +247,7 @@ def _are_loosely_equal_forex(
 
 
 def _are_loosely_equal_a_contract(
-        loose: AContract, well_defined: AContract,
+    loose: AContract, well_defined: AContract,
 ) -> bool:
     equal = True
 
@@ -256,13 +256,11 @@ def _are_loosely_equal_a_contract(
     elif loose.con_id is not None and loose.con_id != well_defined.con_id:
         equal = False
     elif (
-            loose.exchange is not None
-            and loose.exchange != well_defined.exchange
+        loose.exchange is not None and loose.exchange != well_defined.exchange
     ):
         equal = False
     elif (
-            loose.currency is not None
-            and loose.currency != well_defined.currency
+        loose.currency is not None and loose.currency != well_defined.currency
     ):
         equal = False
 

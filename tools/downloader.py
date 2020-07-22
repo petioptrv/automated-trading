@@ -1,10 +1,10 @@
 from datetime import timedelta, date
 
 from algotradepy.historical.loaders import HistoricalRetriever
-from algotradepy.historical.providers import YahooProvider
+from algotradepy.historical.historical_providers import YahooHistoricalProvider
 
 if __name__ == "__main__":
-    provider = YahooProvider()
+    provider = YahooHistoricalProvider()
     hr = HistoricalRetriever(provider=provider)
     end_date = date.today()
     hr.retrieve_bar_data(

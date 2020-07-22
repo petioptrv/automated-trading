@@ -1,3 +1,7 @@
+import collections.abc
+from typing import Dict, Any
+
+
 class ReprAble:
     def __repr__(self):
         class_name = type(self).__name__
@@ -38,3 +42,14 @@ class Comparable:
                     break
 
         return equal
+
+
+def recursive_dict_update(
+    receiver: Dict[Any, Any], updater: Dict[Any, Any],
+) -> Dict[Any, Any]:
+    for k, v in updater.items():
+        if isinstance(v, collections.abc.Mapping):
+            receiver[k] = recursive_dict_update(receiver.get(k, {}), v)
+        else:
+            receiver[k] = v
+    return receiver

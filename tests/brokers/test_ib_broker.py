@@ -9,7 +9,7 @@ from algotradepy.contracts import (
     StockContract,
     Exchange,
     Currency,
-    ForexContract, PriceType,
+    ForexContract,
 )
 from algotradepy.orders import (
     AnOrder,
@@ -155,11 +155,7 @@ def ib_stk_contract_spy():
     pytest.importorskip("ib_insync")
     from ib_insync.contract import Stock
 
-    contract = Stock(
-        symbol="SPY",
-        exchange="SMART",
-        currency="USD"
-    )
+    contract = Stock(symbol="SPY", exchange="SMART", currency="USD")
 
     return contract
 
@@ -169,10 +165,7 @@ def ib_mkt_buy_order_1():
     pytest.importorskip("ib_insync")
     from ib_insync.order import MarketOrder
 
-    order = MarketOrder(
-        action="BUY",
-        totalQuantity=1,
-    )
+    order = MarketOrder(action="BUY", totalQuantity=1,)
 
     return order
 
@@ -182,10 +175,7 @@ def ib_mkt_sell_order_1():
     pytest.importorskip("ib_insync")
     from ib_insync.order import MarketOrder
 
-    order = MarketOrder(
-        action="SELL",
-        totalQuantity=1,
-    )
+    order = MarketOrder(action="SELL", totalQuantity=1,)
 
     return order
 
@@ -195,11 +185,7 @@ def ib_lmt_sell_order_2_1000():
     pytest.importorskip("ib_insync")
     from ib_insync.order import LimitOrder
 
-    order = LimitOrder(
-        action="SELL",
-        totalQuantity=2,
-        lmtPrice=1000,
-    )
+    order = LimitOrder(action="SELL", totalQuantity=2, lmtPrice=1000,)
 
     return order
 
@@ -222,11 +208,11 @@ def test_subscribe_to_new_trades_non_master_raises(non_master_broker):
 
 
 def test_subscribe_to_new_tws_trades(
-        master_broker,
-        non_master_ib_test_broker,
-        ib_stk_contract_spy,
-        ib_mkt_buy_order_1,
-        ib_lmt_sell_order_2_1000,
+    master_broker,
+    non_master_ib_test_broker,
+    ib_stk_contract_spy,
+    ib_mkt_buy_order_1,
+    ib_lmt_sell_order_2_1000,
 ):
     already_logged = []
     open_orders = OrderedDict()
@@ -304,10 +290,10 @@ def test_subscribe_to_trade_updates_non_master_raises(non_master_broker):
 
 
 def test_subscribe_to_tws_trade_updates(
-        master_broker,
-        non_master_ib_test_broker,
-        ib_stk_contract_spy,
-        ib_mkt_buy_order_1,
+    master_broker,
+    non_master_ib_test_broker,
+    ib_stk_contract_spy,
+    ib_mkt_buy_order_1,
 ):
     open_orders = OrderedDict()
 
@@ -364,8 +350,7 @@ def test_get_position(
     initial_position = master_broker.get_position(contract=spy_stock_contract)
 
     trade = non_master_ib_test_broker.placeOrder(
-        contract=ib_stk_contract_spy,
-        order=ib_mkt_buy_order_1,
+        contract=ib_stk_contract_spy, order=ib_mkt_buy_order_1,
     )
 
     while trade.isActive() and not trade.isDone():
@@ -376,8 +361,7 @@ def test_get_position(
     assert spy_position == initial_position + 1
 
     trade = non_master_ib_test_broker.placeOrder(
-        contract=ib_stk_contract_spy,
-        order=ib_mkt_sell_order_1,
+        contract=ib_stk_contract_spy, order=ib_mkt_sell_order_1,
     )
 
     while trade.isActive() and not trade.isDone():
@@ -449,11 +433,9 @@ def test_receive_limit_order(non_master_ib_test_broker, master_broker):
     increment_tests_passed()
 
 
-@pytest.mark.parametrize(
-    "aux_price,trailing_percent", [(5, None), (None, 5)]
-)
+@pytest.mark.parametrize("aux_price,trailing_percent", [(5, None), (None, 5)])
 def test_place_trailing_stop_order(
-        aux_price, trailing_percent, master_ib_test_broker, non_master_broker,
+    aux_price, trailing_percent, master_ib_test_broker, non_master_broker,
 ):
     from ib_insync.util import UNSET_DOUBLE
 
@@ -500,11 +482,9 @@ def test_place_trailing_stop_order(
     increment_tests_passed()
 
 
-@pytest.mark.parametrize(
-    "aux_price,trailing_percent", [(5, None), (None, 5)]
-)
+@pytest.mark.parametrize("aux_price,trailing_percent", [(5, None), (None, 5)])
 def test_receive_trailing_stop_order(
-        aux_price, trailing_percent, non_master_ib_test_broker, master_broker,
+    aux_price, trailing_percent, non_master_ib_test_broker, master_broker,
 ):
     from ib_insync.util import UNSET_DOUBLE
     from ib_insync.order import Order as IBorder
@@ -642,91 +622,11 @@ def test_exchanges_and_currencies(
     increment_tests_passed()
 
 
-def test_subscribe_to_tick_data(master_broker):
-    con = None
-    ask = None
-    bid = None
-    mid = None
-
-    def update_ask(contract_, price_):
-        nonlocal con, ask
-        con = contract_
-        ask = price_
-
-    def update_bid(c, price_):
-        nonlocal bid
-        bid = price_
-
-    def update_mid(c, price_):
-        nonlocal mid
-        mid = price_
-
-    contract = StockContract(symbol="SPY")
-    master_broker.subscribe_to_tick_data(
-        contract=contract, func=update_ask, price_type=PriceType.ASK,
-    )
-    master_broker.subscribe_to_tick_data(
-        contract=contract, func=update_bid, price_type=PriceType.BID,
-    )
-    master_broker.subscribe_to_tick_data(
-        contract=contract, func=update_mid, price_type=PriceType.MARKET,
-    )
-
-    t0 = time.time()
-    while (
-            con is None
-            and ask is None
-            and bid is None
-            and mid is None
-            and time.time() - t0 <= AWAIT_TIME_OUT
-    ):
-        master_broker.sleep()
-
-    assert con == contract
-    assert ask > bid
-    assert mid == (ask + bid) / 2
-
-
-def test_cancel_tick_data(master_broker):
-    mid = None
-
-    def update_mid(c, price_):
-        nonlocal mid
-        mid = price_
-
-    contract = StockContract(symbol="SPY")
-    master_broker.subscribe_to_tick_data(
-        contract=contract, func=update_mid, price_type=PriceType.MARKET,
-    )
-
-    t0 = time.time()
-    while mid is None and time.time() - t0 <= AWAIT_TIME_OUT:
-        master_broker.sleep()
-
-    assert mid is not None
-
-    mid = None
-    t0 = time.time()
-    while mid is None and time.time() - t0 <= AWAIT_TIME_OUT:
-        master_broker.sleep()
-
-    assert mid is not None  # was refreshed
-
-    master_broker.cancel_tick_data(contract=contract, func=update_mid)
-    master_broker.sleep()
-    mid = None
-    t0 = time.time()
-    while mid is None and time.time() - t0 <= AWAIT_TIME_OUT:
-        master_broker.sleep()
-
-    assert mid is None  # did not refresh again
-
-
 def test_log_all_tests_passed_ts():
     global tests_passed
     assert tests_passed == 33
 
-    ts_f_path = PROJECT_DIR / "test_scripts" / "test_ib_broker_ts.log"
+    ts_f_path = PROJECT_DIR / "test_logs" / "test_ib_broker_ts.log"
 
     with open(file=ts_f_path, mode="w") as f:
         ts = str(time.time())

@@ -4,13 +4,14 @@ from datetime import date, timedelta, datetime
 from typing import Optional
 
 import pandas as pd
-import requests
 
+from algotradepy.connectors.iex_connector import IEXConnector
+from algotradepy.contracts import AContract
 from algotradepy.historical.hist_utils import is_daily
 from algotradepy.time_utils import generate_trading_days
 
 
-class AProvider(ABC):
+class AHistoricalProvider(ABC):
     """An abstract historical data provider.
 
     Provides methods for downloading data from an API provided by one of the
@@ -18,7 +19,6 @@ class AProvider(ABC):
 
     Parameters
     ----------
-    api_token : str, optional, default None
     simulation : bool, default True
         Used in cases where an API provides a simulation mode.
     """
@@ -26,15 +26,14 @@ class AProvider(ABC):
     _MAIN_COLS = ["open", "high", "low", "close", "volume"]
 
     def __init__(
-        self, api_token: Optional[str] = None, simulation: bool = True,
+        self, simulation: bool = True, **kwargs,
     ):
-        self._api_token = api_token
         self.simulation = simulation
 
     @abstractmethod
     def download_data(
         self,
-        symbol: str,
+        contract: AContract,
         start_date: date,
         end_date: date,
         bar_size: timedelta,
@@ -44,7 +43,7 @@ class AProvider(ABC):
 
         Parameters
         ----------
-        symbol : str
+        contract : AContract
         start_date : datetime.date
         end_date : datetime.date
         bar_size : datetime.timedelta
@@ -57,7 +56,7 @@ class AProvider(ABC):
         raise NotImplementedError
 
 
-class YahooProvider(AProvider):
+class YahooHistoricalProvider(AHistoricalProvider):
     """Historical data provider implementation based on the Yahoo! finance API.
 
     Notes
@@ -65,14 +64,12 @@ class YahooProvider(AProvider):
     Using `yfinance<https://pypi.org/project/yfinance/>`_ package.
     """
 
-    def __init__(
-        self, api_token: Optional[str] = None, simulation: bool = True
-    ):
-        super().__init__(api_token=api_token, simulation=simulation)
+    def __init__(self, simulation: bool = True):
+        super().__init__(simulation=simulation)
 
     def download_data(
         self,
-        symbol: str,
+        contract: AContract,
         start_date: date,
         end_date: date,
         bar_size: Optional[timedelta] = None,
@@ -87,7 +84,7 @@ class YahooProvider(AProvider):
 
         interval = self._get_interval_str(interval=bar_size)
         data = pdr.data.get_data_yahoo(
-            symbol,
+            contract.symbol,
             interval=interval,
             start=start_date,
             end=end_date + timedelta(days=1),
@@ -105,7 +102,7 @@ class YahooProvider(AProvider):
     def _validate_bar_size(bar_size: Optional[timedelta]):
         if bar_size == timedelta(0):
             raise ValueError(
-                f"{YahooProvider.__name__} cannot provide tick data."
+                f"{YahooHistoricalProvider.__name__} cannot provide tick data."
             )
 
     @staticmethod
@@ -148,69 +145,34 @@ class YahooProvider(AProvider):
         return data
 
 
-class IEXProvider(AProvider):
+class IEXHistoricalProvider(AHistoricalProvider):
     """Historical data provider implementation.
-
-    TODO: Extract server-comm functionality into a connector.
 
     Notes
     -----
     `Data provided by IEX Cloud<https://iexcloud.io>`_
     """
 
-    _REQ_DATE_FORMAT = "%Y%m%d"
-
     def __init__(
-        self, api_token: Optional[str] = None, simulation: bool = True
+        self, api_token: str, simulation: bool = True,
     ):
-        super().__init__(api_token=api_token, simulation=simulation)
-
-    @property
-    def _base_url(self) -> str:
-        if self.simulation:
-            mode = "sandbox"
-        else:
-            mode = "cloud"
-
-        url = f"https://{mode}.iexapis.com/stable"
-
-        return url
+        super().__init__(simulation=simulation)
+        self._conn = IEXConnector(api_token=api_token, simulation=simulation)
 
     def download_data(
         self,
-        symbol: str,
+        contract: AContract,
         start_date: date,
         end_date: date,
         bar_size: timedelta,
         **kwargs,
     ):
-        self._validate_bar_size(bar_size=bar_size)
-
-        params = {"token": self._api_token}
-
-        if is_daily(bar_size=bar_size):
-            request_type = "chart"
-            params["chartByDay"] = True
-            params["range"] = "date"
-        elif bar_size == timedelta(minutes=1):
-            request_type = "intraday-prices"
-            params["range"] = "1d"
-        else:
-            raise ValueError(
-                f"{type(self)} can only download historical data or"
-                f" 1-minute bars. Got a bar size of {bar_size}."
-            )
-
-        params["types"] = [request_type]
-        url = f"{self._base_url}/stock/{symbol.lower()}/batch"
-
         data = pd.DataFrame()
         dates = generate_trading_days(start_date=start_date, end_date=end_date)
         for date_ in dates:
-            params["exactDate"] = date_.strftime(self._REQ_DATE_FORMAT)
-            r = requests.get(url=url, params=params)
-            json_data = json.loads(r.text)
-            day_data = pd.DataFrame(data=json_data[request_type])
+            day_data = self._conn.download_stock_data(
+                symbol=contract.symbol, request_date=date_, bar_size=bar_size,
+            )
             data = data.append(other=day_data, ignore_index=True)
 
         if len(data) != 0:
@@ -220,13 +182,6 @@ class IEXProvider(AProvider):
                 data = self._format_intraday_data(data=data)
 
         return data
-
-    @staticmethod
-    def _validate_bar_size(bar_size: timedelta):
-        if bar_size == timedelta(0):
-            raise ValueError(
-                f"{IEXProvider.__name__} cannot provide tick data."
-            )
 
     def _format_daily_data(self, data: pd.DataFrame):
         data["datetime"] = pd.to_datetime(data["date"])
@@ -239,7 +194,6 @@ class IEXProvider(AProvider):
         return data
 
     def _format_intraday_data(self, data: pd.DataFrame):
-        # ugly things happen here... ugly, but optimized
         data["datetime"] = data.apply(
             func=lambda x: datetime.combine(
                 datetime.strptime(x["date"], "%Y-%m-%d").date(),

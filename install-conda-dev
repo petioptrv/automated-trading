@@ -1,10 +1,12 @@
 #!/bin/bash
 
+# TODO: allow installation of third-party software via args
+
 # adaptation of https://github.com/CoinAlpha/hummingbot/blob/master/install
 
 cd "$(dirname "$0")" || return 1
 
-source other_scripts/get-conda-bin
+source scripts/get-conda-bin
 
 ENV_FILE=environment.yml  # TODO: make file
 
@@ -19,4 +21,4 @@ source "${CONDA_BIN}/activate" algotradepy
 
 pre-commit install
 versioneer install
-cp other_scripts/pre-push .git/hooks/pre-push
+cp scripts/pre-push .git/hooks/pre-push

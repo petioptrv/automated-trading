@@ -81,7 +81,7 @@ def test_get_position(connector):
         if position.contract.symbol == "SPY":
             spy_pos += position.position
 
-    assert spy_pos == 0
+    assert spy_pos == 0  # fix to not rely on absolute value
 
     increment_tests_passed()
 
@@ -104,7 +104,7 @@ def test_log_all_tests_passed_ts():
     global tests_passed
     assert tests_passed == 4
 
-    ts_f_path = PROJECT_DIR / "test_scripts" / "test_ib_connector_ts.log"
+    ts_f_path = PROJECT_DIR / "test_logs" / "test_ib_connector_ts.log"
 
     with open(file=ts_f_path, mode="w") as f:
         ts = str(time.time())

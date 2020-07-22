@@ -18,13 +18,14 @@ class TradeStatus(ReprAble, Comparable):
     """
     Semantically, associated with an order.
     """
+
     def __init__(
-            self,
-            state: TradeState,
-            filled: float,
-            remaining: float,
-            ave_fill_price: float,
-            order_id: Optional[int],
+        self,
+        state: TradeState,
+        filled: float,
+        remaining: float,
+        ave_fill_price: float,
+        order_id: Optional[int],
     ):
         super().__init__()
         self._order_id = order_id
@@ -54,13 +55,14 @@ class TradeStatus(ReprAble, Comparable):
         return self._ave_fill_price
 
 
-class Trade:
+class Trade(ReprAble):
     def __init__(
-            self,
-            contract: AContract,
-            order: AnOrder,
-            status: Optional[TradeStatus] = None,
+        self,
+        contract: AContract,
+        order: AnOrder,
+        status: Optional[TradeStatus] = None,
     ):
+        super().__init__()
         self._contract = contract
         self._order = order
         self._status = status
@@ -76,6 +78,14 @@ class Trade:
     @property
     def status(self) -> TradeStatus:
         return self._status
+
+    @status.setter
+    def status(self, new_status: TradeStatus):
+        self._status = new_status
+
+    def __hash__(self):
+        h = hash((hash(self._contract), hash(self._order)),)
+        return h
 
     def __eq__(self, other) -> bool:
         equal = True

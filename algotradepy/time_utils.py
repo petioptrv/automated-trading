@@ -47,3 +47,8 @@ def time_arithmetic(start_time: time, delta: timedelta,) -> time:
 
     end_time = res_dt.time()
     return end_time
+
+
+def is_time_aware(dt) -> bool:
+    is_aware = dt.tzinfo is not None or dt.tzinfo.utcoffset(dt) is not None
+    return is_aware

@@ -44,16 +44,14 @@ def assert_tests_ran_after_modification(
         raise SystemExit(DNE)
 
 
-IB_BROKER_TEST_TS_F_PATH = (
-    PROJECT_DIR / "test_scripts" / "test_ib_broker_ts.log"
-)
+IB_BROKER_TEST_TS_F_PATH = PROJECT_DIR / "test_logs" / "test_ib_broker_ts.log"
 IB_BROKER_F_PATH = PROJECT_DIR / "algotradepy" / "brokers" / "ib_broker.py"
 assert_tests_ran_after_modification(
     "ib_broker_tests", IB_BROKER_TEST_TS_F_PATH, IB_BROKER_F_PATH,
 )
 
 IB_CONNECTOR_TEST_TS_F_PATH = (
-    PROJECT_DIR / "test_scripts" / "test_ib_connector_ts.log"
+    PROJECT_DIR / "test_logs" / "test_ib_connector_ts.log"
 )
 IB_CONNECTOR_F_PATH = (
     PROJECT_DIR / "algotradepy" / "connectors" / "ib_connector.py"

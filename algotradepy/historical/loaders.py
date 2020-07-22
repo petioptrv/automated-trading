@@ -6,6 +6,12 @@ from typing import Optional, List
 import pandas as pd
 import numpy as np
 
+from algotradepy.contracts import (
+    AContract,
+    StockContract,
+    OptionContract,
+    ForexContract,
+)
 from algotradepy.historical.hist_utils import (
     bar_size_to_str,
     hist_file_names,
@@ -14,7 +20,7 @@ from algotradepy.historical.hist_utils import (
     DATE_FORMAT,
     HIST_DATA_DIR,
 )
-from algotradepy.historical.providers import AProvider
+from algotradepy.historical.historical_providers import AHistoricalProvider
 from algotradepy.time_utils import generate_trading_days
 
 
@@ -36,13 +42,15 @@ class HistCacheHandler:
 
     def get_cached_data(
         self,
-        symbol: str,
+        contract: AContract,
         start_date: date,
         end_date: date,
         bar_size: timedelta,
     ):
+        contract_type = self._get_con_type(contract=contract)
+        symbol = contract.symbol
         bar_size_str = bar_size_to_str(bar_size=bar_size)
-        path = self.base_data_path / symbol.upper() / bar_size_str
+        path = self.base_data_path / contract_type / symbol / bar_size_str
         f_names = hist_file_names(
             start_date=start_date, end_date=end_date, bar_size=bar_size
         )
@@ -64,13 +72,14 @@ class HistCacheHandler:
         return data
 
     def cache_data(
-        self, data: pd.DataFrame, symbol: str, bar_size: timedelta,
+        self, data: pd.DataFrame, contract: AContract, bar_size: timedelta,
     ):
         if len(data) != 0:
+            contract_type = self._get_con_type(contract=contract)
+            symbol = contract.symbol
+            bar_size_str = bar_size_to_str(bar_size=bar_size)
             folder_path = (
-                self.base_data_path
-                / symbol.upper()
-                / bar_size_to_str(bar_size=bar_size)
+                self.base_data_path / contract_type / symbol / bar_size_str
             )
             if not os.path.exists(path=folder_path):
                 os.makedirs(name=folder_path)
@@ -91,6 +100,19 @@ class HistCacheHandler:
                         file_name = f"{date_.date().strftime(DATE_FORMAT)}.csv"
                         file_path = folder_path / file_name
                         group.to_csv(file_path, date_format=DATETIME_FORMAT)
+
+    @staticmethod
+    def _get_con_type(contract: AContract) -> str:
+        if isinstance(contract, StockContract):
+            con_type = "stocks"
+        elif isinstance(contract, OptionContract):
+            con_type = "options"
+        elif isinstance(contract, ForexContract):
+            con_type = "forex"
+        else:
+            raise TypeError(f"Unknown contract type {type(contract)}.")
+
+        return con_type
 
 
 class HistoricalRetriever:
@@ -115,7 +137,7 @@ class HistoricalRetriever:
 
     def __init__(
         self,
-        provider: Optional[AProvider] = None,
+        provider: Optional[AHistoricalProvider] = None,
         hist_data_dir: Path = HIST_DATA_DIR,
     ):
         self._cache_handler = HistCacheHandler(hist_data_dir=hist_data_dir)
@@ -123,7 +145,7 @@ class HistoricalRetriever:
 
     def retrieve_bar_data(
         self,
-        symbol: str,
+        contract: AContract,
         bar_size: timedelta,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
@@ -137,7 +159,7 @@ class HistoricalRetriever:
 
         Parameters
         ----------
-        symbol : str
+        contract : AContract
         bar_size : datetime.timedelta
         start_date : datetime.date, optional, default None
         end_date : datetime.date, optional, default None
@@ -156,7 +178,7 @@ class HistoricalRetriever:
             end_date -= timedelta(days=1)
 
         data = self._cache_handler.get_cached_data(
-            symbol=symbol,
+            contract=contract,
             start_date=start_date,
             end_date=end_date,
             bar_size=bar_size,
@@ -169,7 +191,7 @@ class HistoricalRetriever:
 
             for date_range in date_ranges:
                 range_data = self._download_data(
-                    symbol=symbol,
+                    contract=contract,
                     start_date=date_range[0],
                     end_date=date_range[-1],
                     bar_size=bar_size,
@@ -177,7 +199,7 @@ class HistoricalRetriever:
                 data = data.append(range_data)
 
                 self._cache_handler.cache_data(
-                    data=range_data, symbol=symbol, bar_size=bar_size,
+                    data=range_data, contract=contract, bar_size=bar_size,
                 )
 
         return data
@@ -212,14 +234,14 @@ class HistoricalRetriever:
 
     def _download_data(
         self,
-        symbol: str,
+        contract: AContract,
         start_date: date,
         end_date: date,
         bar_size: timedelta,
     ):
         print(f"{start_date} - {end_date}")
         data = self._provider.download_data(
-            symbol=symbol,
+            contract=contract,
             start_date=start_date,
             end_date=end_date,
             bar_size=bar_size,

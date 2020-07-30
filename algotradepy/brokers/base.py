@@ -45,15 +45,18 @@ class ABroker(ABC):
     @property
     @abstractmethod
     def trades(self) -> List[Trade]:
+        """Returns all trades placed in the current session."""
         raise NotImplementedError
 
     @property
     @abstractmethod
     def open_trades(self) -> List[Trade]:
+        """Returns all currently open trades placed in the ongoing session."""
         raise NotImplementedError
 
     @abstractmethod
     def sleep(self, secs: float):
+        """Allows the server to deliver data."""
         raise NotImplementedError
 
     @abstractmethod
@@ -94,12 +97,12 @@ class ABroker(ABC):
 
     @abstractmethod
     def place_trade(self, trade: Trade, *args, **kwargs) -> Tuple[bool, Trade]:
-        """Place an order with specified details.
+        """Place a trade with specified details.
 
         Parameters
         ----------
-        trade : algotradepy.Trade
-            The trade-definition to execute.
+        trade : Trade
+            The trade to execute.
         Returns
         -------
         tuple of bool and int
@@ -110,6 +113,13 @@ class ABroker(ABC):
 
     @abstractmethod
     def cancel_trade(self, trade: Trade):
+        """Cancel placed traded.
+
+        Parameters
+        ----------
+        trade : Trade
+            The trade to cancel.
+        """
         raise NotImplementedError
 
     @abstractmethod

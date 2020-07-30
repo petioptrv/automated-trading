@@ -359,3 +359,4 @@ $RECYCLE.BIN/
 /venv/
 /histData/
 .vscode/*
+/api_tokens/*

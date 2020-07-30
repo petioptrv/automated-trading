@@ -33,6 +33,19 @@ class ADataStreamer(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def cancel_bars(self, contract: AContract, func: Callable):
+        """Cancel bar data updates.
+
+        Parameters
+        ----------
+        contract : AContract
+            The contract definition for which to cancel bar updates.
+        func : Callable
+            The function for which to cancel bar updates.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def subscribe_to_tick_data(
         self,
         contract: AContract,
@@ -67,5 +80,40 @@ class ADataStreamer(ABC):
             The contract definition for which to cancel tick updates.
         func : Callable
             The function for which to cancel tick updates.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def subscribe_to_trades(
+        self,
+        contract: AContract,
+        func: Callable,
+        fn_kwargs: Optional[Dict] = None,
+    ):
+        """Subscribe to trade updates.
+
+        Parameters
+        ----------
+        contract : AContract
+            The contract definition for which to request trade updates.
+        func : Callable
+            The callback function. It must accept a pandas.Series as its sole
+            positional argument.
+        fn_kwargs : dict
+            The keyword arguments to pass to the callback function along with
+            the positional arguments.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def cancel_trades(self, contract: AContract, func: Callable):
+        """Cancel trade updates.
+
+        Parameters
+        ----------
+        contract : AContract
+            The contract definition for which to cancel trade updates.
+        func : Callable
+            The function for which to cancel trade updates.
         """
         raise NotImplementedError

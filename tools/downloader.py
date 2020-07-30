@@ -1,7 +1,9 @@
 from datetime import timedelta, date
 
 from algotradepy.historical.loaders import HistoricalRetriever
-from algotradepy.historical.historical_providers import YahooHistoricalProvider
+from algotradepy.historical.providers.yahoo_provider import (
+    YahooHistoricalProvider,
+)
 
 if __name__ == "__main__":
     provider = YahooHistoricalProvider()

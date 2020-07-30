@@ -26,7 +26,7 @@ class HistoricalAggregator:
                 f" {target_bar_size} bars. Target must be larger than base."
             )
 
-        data = self._cache_handler.get_cached_data(
+        data = self._cache_handler.get_cached_bar_data(
             contract=contract,
             start_date=start_date,
             end_date=end_date,
@@ -46,7 +46,7 @@ class HistoricalAggregator:
         )
         data.index = data.index.droplevel(0)
 
-        self._cache_handler.cache_data(
+        self._cache_handler.cache_bar_data(
             data=data, contract=contract, bar_size=target_bar_size,
         )
 

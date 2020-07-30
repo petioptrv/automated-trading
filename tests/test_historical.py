@@ -7,13 +7,16 @@ import pytest
 
 from algotradepy.contracts import StockContract
 from algotradepy.historical.loaders import HistoricalRetriever
-from algotradepy.historical.historical_providers import (
+from algotradepy.historical.providers.polygon_provider import (
+    PolygonHistoricalProvider,
+)
+from algotradepy.historical.providers.iex_provider import IEXHistoricalProvider
+from algotradepy.historical.providers.yahoo_provider import (
     YahooHistoricalProvider,
-    IEXHistoricalProvider,
 )
 from algotradepy.historical.transformers import HistoricalAggregator
 from algotradepy.time_utils import generate_trading_days
-from tests.conftest import TEST_DATA_DIR
+from tests.conftest import TEST_DATA_DIR, PROJECT_DIR
 
 
 def validate_data_range(
@@ -89,11 +92,35 @@ def test_retriever_cached_daily():
     validate_data_range(data=data, start_date=start_date, end_date=end_date)
 
 
+def test_retrieve_cached_trades():
+    start_date = date(2020, 6, 17)
+    end_date = date(2020, 6, 19)
+
+    retriever = HistoricalRetriever(hist_data_dir=TEST_DATA_DIR)
+
+    contract = StockContract(symbol="SPY")
+    data = retriever.retrieve_trades_data(
+        contract=contract,
+        start_date=start_date,
+        end_date=end_date,
+        cache_only=True,
+    )
+
+    assert len(data) != 0
+
+    validate_data_range(data=data, start_date=start_date, end_date=end_date)
+
+
+API_TOKEN_FILE = PROJECT_DIR / "api_tokens" / "polygon-token.txt"
+with open(API_TOKEN_FILE) as f:
+    POLYGON_API_TOKEN = f.read()
+
 HIST_PROVIDERS = [
     YahooHistoricalProvider(),
     IEXHistoricalProvider(
         api_token="Tpk_98c62e8146894c4985dfb98034d7ac87"
     ),  # todo: remove simulation token
+    PolygonHistoricalProvider(api_token=POLYGON_API_TOKEN,),
 ]
 
 
@@ -104,12 +131,16 @@ def test_retrieve_non_cached_daily(tmpdir, provider):
 
     retriever = HistoricalRetriever(provider=provider, hist_data_dir=tmpdir,)
     contract = StockContract(symbol="SPY")
-    data = retriever.retrieve_bar_data(
-        contract=contract,
-        start_date=start_date,
-        end_date=end_date,
-        bar_size=timedelta(days=1),
-    )
+
+    try:
+        data = retriever.retrieve_bar_data(
+            contract=contract,
+            start_date=start_date,
+            end_date=end_date,
+            bar_size=timedelta(days=1),
+        )
+    except NotImplementedError:
+        return
 
     validate_data_range(data=data, start_date=start_date, end_date=end_date)
 
@@ -119,33 +150,59 @@ def test_retrieve_non_cached_intraday(tmpdir, provider):
     start_date = date.today() - timedelta(days=7)
     end_date = date.today() - timedelta(days=1)
 
-    retriever = HistoricalRetriever(provider=provider, hist_data_dir=tmpdir,)
+    retriever = HistoricalRetriever(provider=provider, hist_data_dir=tmpdir)
     contract = StockContract(symbol="SPY")
-    data = retriever.retrieve_bar_data(
-        contract=contract,
-        start_date=start_date,
-        end_date=end_date,
-        bar_size=timedelta(minutes=1),
-    )
+
+    try:
+        data = retriever.retrieve_bar_data(
+            contract=contract,
+            start_date=start_date,
+            end_date=end_date,
+            bar_size=timedelta(minutes=1),
+        )
+    except NotImplementedError:
+        return
 
     validate_data_range(data=data, start_date=start_date, end_date=end_date)
     assert np.isclose(len(data), 5 * 6.5 * 60, atol=7 * 60)
 
 
 @pytest.mark.parametrize("provider", [provider for provider in HIST_PROVIDERS])
+def test_retrieve_non_cached_trades_data(tmpdir, provider):
+    start_date = date(2020, 7, 22)
+    end_date = date(2020, 7, 23)
+
+    retriever = HistoricalRetriever(provider=provider, hist_data_dir=tmpdir)
+    contract = StockContract(symbol="SPY")
+
+    try:
+        data = retriever.retrieve_trades_data(
+            contract=contract, start_date=start_date, end_date=end_date,
+        )
+    except NotImplementedError:
+        return
+
+    validate_data_range(data=data, start_date=start_date, end_date=end_date)
+
+
+@pytest.mark.parametrize("provider", [provider for provider in HIST_PROVIDERS])
 def test_retrieving_intermittently_cached_daily(tmpdir, provider):
-    retriever = HistoricalRetriever(provider=provider, hist_data_dir=tmpdir,)
+    retriever = HistoricalRetriever(provider=provider, hist_data_dir=tmpdir)
 
     start_date = date(2020, 3, 3)
     end_date = date(2020, 3, 3)
 
     contract = StockContract(symbol="SPY")
-    retriever.retrieve_bar_data(
-        contract=contract,
-        start_date=start_date,
-        end_date=end_date,
-        bar_size=timedelta(days=1),
-    )
+
+    try:
+        retriever.retrieve_bar_data(
+            contract=contract,
+            start_date=start_date,
+            end_date=end_date,
+            bar_size=timedelta(days=1),
+        )
+    except NotImplementedError:  # todo: fix
+        return
 
     start_date = date(2020, 3, 5)
     end_date = date(2020, 3, 5)
@@ -189,12 +246,45 @@ def test_retrieving_intermittently_cached_intraday(tmpdir, provider):
         end_date = date_range[-1]
 
         contract = StockContract(symbol="SPY")
-        data = retriever.retrieve_bar_data(
-            contract=contract,
-            start_date=start_date,
-            end_date=end_date,
-            bar_size=timedelta(days=1),
-        )
+
+        try:
+            data = retriever.retrieve_bar_data(
+                contract=contract,
+                start_date=start_date,
+                end_date=end_date,
+                bar_size=timedelta(days=1),
+            )
+        except NotImplementedError:  # todo: fix
+            return
+
+    validate_data_range(data=data, start_date=dates[0], end_date=dates[-1])
+
+
+@pytest.mark.parametrize("provider", [provider for provider in HIST_PROVIDERS])
+def test_retrieving_intermittently_cached_trades(tmpdir, provider):
+    retriever = HistoricalRetriever(provider=provider, hist_data_dir=tmpdir,)
+
+    data = pd.DataFrame()
+    dates = generate_trading_days(
+        start_date=date(2020, 7, 21), end_date=date(2020, 7, 23),
+    )
+    date_ranges = [
+        dates[:1],
+        dates[-1:],
+        dates,
+    ]
+    for date_range in date_ranges:
+        start_date = date_range[0]
+        end_date = date_range[-1]
+
+        contract = StockContract(symbol="SPY")
+
+        try:
+            data = retriever.retrieve_trades_data(
+                contract=contract, start_date=start_date, end_date=end_date,
+            )
+        except NotImplementedError:
+            return
 
     validate_data_range(data=data, start_date=dates[0], end_date=dates[-1])
 

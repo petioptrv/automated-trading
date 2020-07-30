@@ -49,6 +49,9 @@ class SimulationDataStreamer(ADataStreamer, ASimulationPiece):
         callbacks = contract_dict.setdefault(contract, {})
         callbacks[func] = fn_kwargs
 
+    def cancel_bars(self, contract: AContract, func: Callable):
+        raise NotImplementedError
+
     def subscribe_to_tick_data(
         self,
         contract: AContract,
@@ -76,6 +79,17 @@ class SimulationDataStreamer(ADataStreamer, ASimulationPiece):
                 del callbacks[func]
             if len(callbacks) == 0:
                 del self._tick_callback_table[contract]
+
+    def subscribe_to_trades(
+        self,
+        contract: AContract,
+        func: Callable,
+        fn_kwargs: Optional[Dict] = None,
+    ):
+        raise NotImplementedError
+
+    def cancel_trades(self, contract: AContract, func: Callable):
+        raise NotImplementedError
 
     # ------------------------- Sim Methods ------------------------------------
 

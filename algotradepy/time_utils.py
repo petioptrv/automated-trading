@@ -52,3 +52,13 @@ def time_arithmetic(start_time: time, delta: timedelta,) -> time:
 def is_time_aware(dt) -> bool:
     is_aware = dt.tzinfo is not None or dt.tzinfo.utcoffset(dt) is not None
     return is_aware
+
+
+def milli_to_seconds(milli: int) -> float:
+    s = milli / 1e9
+    return s
+
+
+def seconds_to_milli(s: float) -> int:
+    milli = int(s * 1e9)
+    return milli

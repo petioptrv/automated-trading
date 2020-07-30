@@ -18,6 +18,22 @@ from algotradepy.streamers.base import ADataStreamer
 
 
 class IBDataStreamer(ADataStreamer, IBBase):
+    """Interactive Brokers Data Streamer class.
+
+    This class implements the ADataStreamer interface for use with the
+    Interactive Brokers API. It is an adaptor to the IBConnector, exposing the
+    relevant methods.
+
+    Parameters
+    ----------
+    simulation : bool, default True
+        Ignored if parameter `ib_connector` is supplied.
+    ib_connector : IBConnector, optional, default None
+        A custom instance of the `IBConnector` can be supplied. If not provided,
+        it is assumed that the receiver is TWS (see `IBConnector`'s
+        documentation for more details).
+    """
+
     def __init__(
         self,
         simulation: bool = True,
@@ -37,6 +53,9 @@ class IBDataStreamer(ADataStreamer, IBBase):
         fn_kwargs: Optional[dict] = None,
     ):
         # TODO: implement
+        raise NotImplementedError
+
+    def cancel_bars(self, contract: AContract, func: Callable):
         raise NotImplementedError
 
     def subscribe_to_tick_data(
@@ -103,6 +122,17 @@ class IBDataStreamer(ADataStreamer, IBBase):
                 f"No price subscription found for contract {contract} and"
                 f" function {func}."
             )
+
+    def subscribe_to_trades(
+        self,
+        contract: AContract,
+        func: Callable,
+        fn_kwargs: Optional[Dict] = None,
+    ):
+        raise NotImplementedError
+
+    def cancel_trades(self, contract: AContract, func: Callable):
+        raise NotImplementedError
 
     # ---------------------- Market Data Helpers -------------------------------
 

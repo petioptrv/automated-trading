@@ -32,6 +32,7 @@ setup(
     ],
     extras_require={
         "ibapi": ["ib_insync >=0.9, <1", "ibapi"],
+        "polygon": ["websocket-client==0.57.0"],
         "dev": [
             "pytest",
             "pylint",

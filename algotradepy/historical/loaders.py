@@ -20,7 +20,7 @@ from algotradepy.historical.hist_utils import (
     DATE_FORMAT,
     HIST_DATA_DIR,
 )
-from algotradepy.historical.historical_providers import AHistoricalProvider
+from algotradepy.historical.providers.base import AHistoricalProvider
 from algotradepy.time_utils import generate_trading_days
 
 
@@ -38,52 +38,95 @@ class HistCacheHandler:
 
     @property
     def available_data(self) -> dict:
+        # TODO: implement
         raise NotImplementedError
 
-    def get_cached_data(
+    def get_cached_bar_data(
         self,
         contract: AContract,
         start_date: date,
         end_date: date,
         bar_size: timedelta,
-    ):
-        contract_type = self._get_con_type(contract=contract)
-        symbol = contract.symbol
-        bar_size_str = bar_size_to_str(bar_size=bar_size)
-        path = self.base_data_path / contract_type / symbol / bar_size_str
-        f_names = hist_file_names(
-            start_date=start_date, end_date=end_date, bar_size=bar_size
+        schema_v: Optional[int] = None,
+    ) -> pd.DataFrame:
+        data = self._get_cached_data(
+            contract=contract,
+            start_date=start_date,
+            end_date=end_date,
+            bar_size=bar_size,
+            schema_v=schema_v,
+            suffix=bar_size_to_str(bar_size=bar_size),
         )
-
-        data = pd.DataFrame()
-
-        for f_name in f_names:
-            f_path = path / f_name
-            if os.path.exists(f_path):
-                day_data = pd.read_csv(
-                    f_path, index_col="datetime", parse_dates=True,
-                )
-                data = data.append(day_data)
-
-        if len(data) != 0:
-            if is_daily(bar_size=bar_size):
-                data = data.loc[start_date:end_date]
 
         return data
 
-    def cache_data(
-        self, data: pd.DataFrame, contract: AContract, bar_size: timedelta,
+    def cache_bar_data(
+        self,
+        data: pd.DataFrame,
+        contract: AContract,
+        bar_size: timedelta,
+        schema_v: Optional[int] = None,
+    ):
+        self._cache_data(
+            data=data,
+            contract=contract,
+            bar_size=bar_size,
+            schema_v=schema_v,
+            suffix=bar_size_to_str(bar_size=bar_size),
+        )
+
+    def get_cached_trades_data(
+        self,
+        contract: AContract,
+        start_date: date,
+        end_date: date,
+        schema_v: Optional[int] = None,
+    ) -> pd.DataFrame:
+        data = self._get_cached_data(
+            contract=contract,
+            start_date=start_date,
+            end_date=end_date,
+            bar_size=timedelta(0),
+            schema_v=schema_v,
+            suffix="trades",
+        )
+
+        return data
+
+    def cache_trades_data(
+        self,
+        data: pd.DataFrame,
+        contract: AContract,
+        schema_v: Optional[int] = None,
+    ):
+        self._cache_data(
+            data=data,
+            contract=contract,
+            bar_size=timedelta(0),
+            schema_v=schema_v,
+            suffix="trades",
+        )
+
+    def _cache_data(
+        self,
+        data: pd.DataFrame,
+        contract: AContract,
+        bar_size: timedelta,
+        schema_v: Optional[int],
+        suffix: str,
     ):
         if len(data) != 0:
             contract_type = self._get_con_type(contract=contract)
             symbol = contract.symbol
-            bar_size_str = bar_size_to_str(bar_size=bar_size)
-            folder_path = (
-                self.base_data_path / contract_type / symbol / bar_size_str
-            )
+            folder_path = self.base_data_path / contract_type / symbol / suffix
+
             if not os.path.exists(path=folder_path):
                 os.makedirs(name=folder_path)
+                if schema_v:
+                    with open(folder_path / ".schema_v", "w") as f:
+                        f.write(str(schema_v))
 
+            self._validate_schema(folder_path=folder_path, schema_v=schema_v)
             if is_daily(bar_size=bar_size):
                 file_path = folder_path / "daily.csv"
                 if os.path.exists(file_path):
@@ -101,6 +144,42 @@ class HistCacheHandler:
                         file_path = folder_path / file_name
                         group.to_csv(file_path, date_format=DATETIME_FORMAT)
 
+    def _get_cached_data(
+        self,
+        contract: AContract,
+        start_date: date,
+        end_date: date,
+        bar_size: timedelta,
+        schema_v: Optional[int],
+        suffix: str,
+    ) -> pd.DataFrame:
+        contract_type = self._get_con_type(contract=contract)
+        symbol = contract.symbol
+        folder_path = self.base_data_path / contract_type / symbol / suffix
+        data = pd.DataFrame()
+
+        if not folder_path.exists():
+            return data
+
+        self._validate_schema(folder_path=folder_path, schema_v=schema_v)
+        file_names = hist_file_names(
+            start_date=start_date, end_date=end_date, bar_size=bar_size,
+        )
+
+        for file_name in file_names:
+            file_path = folder_path / file_name
+            if os.path.exists(file_path):
+                day_data = pd.read_csv(
+                    file_path, index_col="datetime", parse_dates=True,
+                )
+                data = data.append(day_data)
+
+        if len(data) != 0:
+            if is_daily(bar_size=bar_size):
+                data = data.loc[start_date:end_date]
+
+        return data
+
     @staticmethod
     def _get_con_type(contract: AContract) -> str:
         if isinstance(contract, StockContract):
@@ -113,6 +192,20 @@ class HistCacheHandler:
             raise TypeError(f"Unknown contract type {type(contract)}.")
 
         return con_type
+
+    @staticmethod
+    def _validate_schema(folder_path: Path, schema_v: Optional[int]):
+        if schema_v is not None:
+            schema_path = folder_path / ".schema_v"
+            with open(schema_path, "r") as f:
+                folder_schema_v = int(f.read())
+            if schema_v != folder_schema_v:
+                folder_path_str = os.path.abspath(folder_path)
+                raise ValueError(
+                    f"Expected folder {folder_path_str} to contain data with"
+                    f" schema version {schema_v}, but it contains version"
+                    f" {folder_schema_v}."
+                )
 
 
 class HistoricalRetriever:
@@ -173,15 +266,15 @@ class HistoricalRetriever:
         data : pd.DataFrame
             The requested historical data.
         """
-        # TODO: refactor to use contract
         if end_date == date.today():
             end_date -= timedelta(days=1)
 
-        data = self._cache_handler.get_cached_data(
+        data = self._cache_handler.get_cached_bar_data(
             contract=contract,
             start_date=start_date,
             end_date=end_date,
             bar_size=bar_size,
+            schema_v=AHistoricalProvider.BARS_SCHEMA_V,
         )
 
         if not cache_only:
@@ -190,7 +283,7 @@ class HistoricalRetriever:
             )
 
             for date_range in date_ranges:
-                range_data = self._download_data(
+                range_data = self._provider.download_bars_data(
                     contract=contract,
                     start_date=date_range[0],
                     end_date=date_range[-1],
@@ -198,8 +291,70 @@ class HistoricalRetriever:
                 )
                 data = data.append(range_data)
 
-                self._cache_handler.cache_data(
-                    data=range_data, contract=contract, bar_size=bar_size,
+                self._cache_handler.cache_bar_data(
+                    data=range_data,
+                    contract=contract,
+                    bar_size=bar_size,
+                    schema_v=AHistoricalProvider.BARS_SCHEMA_V,
+                )
+
+        return data
+
+    def retrieve_trades_data(
+        self,
+        contract: AContract,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        cache_only: bool = False,
+    ) -> pd.DataFrame:
+        """Retrieves the historical data.
+
+        After loading available data from cache, any missing data is downloaded
+        from the provider specified during initialization. Downloaded data is
+        stored to the cache.
+
+        Parameters
+        ----------
+        contract : AContract
+        start_date : datetime.date, optional, default None
+        end_date : datetime.date, optional, default None
+            If the end date is set to today's date, it will be adjusted to
+            yesterday's date to avoid storing partial historical data.
+        cache_only : bool, default False
+            Prevents data-download on cache-miss.
+
+        Returns
+        -------
+        data : pd.DataFrame
+            The requested historical data.
+        """
+        if end_date == date.today():
+            end_date -= timedelta(days=1)
+
+        data = self._cache_handler.get_cached_trades_data(
+            contract=contract,
+            start_date=start_date,
+            end_date=end_date,
+            schema_v=AHistoricalProvider.TRADES_SCHEMA_V,
+        )
+
+        if not cache_only:
+            date_ranges = self._get_missing_date_ranges(
+                data=data, start_date=start_date, end_date=end_date,
+            )
+
+            for date_range in date_ranges:
+                range_data = self._provider.download_trades_data(
+                    contract=contract,
+                    start_date=date_range[0],
+                    end_date=date_range[-1],
+                )
+                data = data.append(range_data)
+
+                self._cache_handler.cache_trades_data(
+                    data=range_data,
+                    contract=contract,
+                    schema_v=AHistoricalProvider.TRADES_SCHEMA_V,
                 )
 
         return data
@@ -231,19 +386,3 @@ class HistoricalRetriever:
             date_ranges = [dates]
 
         return date_ranges
-
-    def _download_data(
-        self,
-        contract: AContract,
-        start_date: date,
-        end_date: date,
-        bar_size: timedelta,
-    ):
-        print(f"{start_date} - {end_date}")
-        data = self._provider.download_data(
-            contract=contract,
-            start_date=start_date,
-            end_date=end_date,
-            bar_size=bar_size,
-        )
-        return data

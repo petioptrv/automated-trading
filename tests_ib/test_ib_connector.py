@@ -15,7 +15,7 @@ def increment_tests_passed():
 
 def test_connection():
     pytest.importorskip("ib_insync")
-    from algotradepy.connectors.ib_connector import build_and_start_connector
+    from algotradeib.ib_connector import build_and_start_connector
 
     connector = build_and_start_connector()
 
@@ -26,7 +26,7 @@ def test_connection():
 
 def test_connector_builder_robustness():
     pytest.importorskip("ib_insync")
-    from algotradepy.connectors.ib_connector import build_and_start_connector
+    from algotradeib.ib_connector import build_and_start_connector
 
     conn0 = build_and_start_connector()
     conn1 = build_and_start_connector()
@@ -45,7 +45,7 @@ def test_connector_builder_robustness():
 
 def test_ib_insync_events():
     pytest.importorskip("ib_insync")
-    from algotradepy.connectors.ib_connector import build_and_start_connector
+    from algotradeib.ib_connector import build_and_start_connector
 
     event_received = False
 
@@ -64,7 +64,7 @@ def test_ib_insync_events():
 @pytest.fixture()
 def connector():
     pytest.importorskip("ib_insync")
-    from algotradepy.connectors.ib_connector import build_and_start_connector
+    from algotradeib.ib_connector import build_and_start_connector
 
     conn = build_and_start_connector()
 

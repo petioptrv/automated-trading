@@ -33,7 +33,7 @@ def increment_tests_passed():
 
 def test_acc_cash():
     pytest.importorskip("ib_insync")
-    from algotradepy.brokers.ib_broker import IBBroker
+    from algotradeib.ib_broker import IBBroker
 
     broker = IBBroker()
 
@@ -49,7 +49,7 @@ def test_acc_cash():
 
 def test_datetime():
     pytest.importorskip("ib_insync")
-    from algotradepy.brokers.ib_broker import IBBroker
+    from algotradeib.ib_broker import IBBroker
 
     from datetime import datetime
 
@@ -70,8 +70,8 @@ def test_datetime():
 
 def get_broker(client_id: int):
     pytest.importorskip("ib_insync")
-    from algotradepy.connectors.ib_connector import build_and_start_connector
-    from algotradepy.brokers.ib_broker import IBBroker
+    from algotradeib.ib_connector import build_and_start_connector
+    from algotradeib.ib_broker import IBBroker
 
     conn = build_and_start_connector(client_id=client_id)
     broker = IBBroker(ib_connector=conn)
@@ -82,7 +82,7 @@ def get_broker(client_id: int):
 @pytest.fixture()
 def master_broker():
     pytest.importorskip("ib_insync")
-    from algotradepy.connectors.ib_connector import MASTER_CLIENT_ID
+    from algotradeib.ib_connector import MASTER_CLIENT_ID
 
     broker = get_broker(client_id=MASTER_CLIENT_ID)
 
@@ -94,7 +94,7 @@ def master_broker():
 @pytest.fixture()
 def non_master_broker():
     pytest.importorskip("ib_insync")
-    from algotradepy.connectors.ib_connector import MASTER_CLIENT_ID
+    from algotradeib.ib_connector import MASTER_CLIENT_ID
 
     broker = get_broker(client_id=MASTER_CLIENT_ID + 1)
 
@@ -127,7 +127,7 @@ def get_ib_test_broker(client_id: int):
 @pytest.fixture()
 def master_ib_test_broker():
     pytest.importorskip("ib_insync")
-    from algotradepy.connectors.ib_connector import MASTER_CLIENT_ID
+    from algotradeib.ib_connector import MASTER_CLIENT_ID
 
     tb = get_ib_test_broker(client_id=MASTER_CLIENT_ID)
 
@@ -140,7 +140,7 @@ def master_ib_test_broker():
 @pytest.fixture()
 def non_master_ib_test_broker():
     pytest.importorskip("ib_insync")
-    from algotradepy.connectors.ib_connector import MASTER_CLIENT_ID
+    from algotradeib.ib_connector import MASTER_CLIENT_ID
 
     tb = get_ib_test_broker(client_id=MASTER_CLIENT_ID + 1)
 
@@ -345,7 +345,7 @@ def test_get_position(
     ib_mkt_buy_order_1,
     ib_mkt_sell_order_1,
 ):
-    from algotradepy.connectors.ib_connector import SERVER_BUFFER_TIME
+    from algotradeib.ib_connector import SERVER_BUFFER_TIME
 
     initial_position = master_broker.get_position(contract=spy_stock_contract)
 

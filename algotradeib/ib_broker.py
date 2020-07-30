@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, Tuple, Dict, List, Callable
 
-from algotradepy.ib_utils import IBBase
+from algotradeib.ib_utils import IBBase
 
 try:
     import ib_insync
@@ -16,7 +16,7 @@ from ibapi.account_summary_tags import (
 from ib_insync.order import Trade as _IBTrade
 
 from algotradepy.brokers.base import ABroker
-from algotradepy.connectors.ib_connector import (
+from algotradeib.ib_connector import (
     IBConnector,
     MASTER_CLIENT_ID,
     SERVER_BUFFER_TIME,

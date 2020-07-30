@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import Optional, Dict, Callable
 
-from algotradepy.ib_utils import IBBase
+from algotradeib.ib_utils import IBBase
 
 try:
     import ib_insync
@@ -13,7 +13,7 @@ except ImportError:
 from ib_insync.ticker import Ticker as _IBTicker
 
 from algotradepy.contracts import AContract, PriceType
-from algotradepy.connectors.ib_connector import IBConnector
+from algotradeib.ib_connector import IBConnector
 from algotradepy.streamers.base import ADataStreamer
 
 

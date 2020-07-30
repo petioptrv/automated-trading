@@ -36,13 +36,13 @@ class IBConnector(IB):
         return self._client_id
 
     def connect(
-            self,
-            host: str = '127.0.0.1',
-            port: int = 7497,
-            client_id: int = 1,
-            timeout: float = 4,
-            readonly: bool = False,
-            account: str = '',
+        self,
+        host: str = "127.0.0.1",
+        port: int = 7497,
+        client_id: int = 1,
+        timeout: float = 4,
+        readonly: bool = False,
+        account: str = "",
     ):
         IB.connect(
             self=self,
@@ -83,7 +83,7 @@ def build_and_start_connector(
     -------
     connector : IBConnector
         The instantiated connector, ready for use.
-        
+
     Notes
     -----
     Socket Port Mapping:

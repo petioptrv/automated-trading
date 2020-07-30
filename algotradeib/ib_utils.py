@@ -28,7 +28,7 @@ from ib_insync.order import (
     ExecutionCondition as _IBExecutionCondition,
 )
 
-from algotradepy.connectors.ib_connector import (
+from algotradeib.ib_connector import (
     IBConnector,
     build_and_start_connector,
     SERVER_BUFFER_TIME,

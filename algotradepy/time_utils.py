@@ -55,10 +55,10 @@ def is_time_aware(dt) -> bool:
 
 
 def milli_to_seconds(milli: int) -> float:
-    s = milli / 1e9
+    s = milli / 1e3
     return s
 
 
 def seconds_to_milli(s: float) -> int:
-    milli = int(s * 1e9)
+    milli = int(s * 1e3)
     return milli

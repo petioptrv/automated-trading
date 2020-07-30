@@ -16,8 +16,8 @@ def increment_tests_passed():
 
 def get_streamer(client_id: int):
     pytest.importorskip("ib_insync")
-    from algotradepy.connectors.ib_connector import build_and_start_connector
-    from algotradepy.streamers.ib_streamer import IBDataStreamer
+    from algotradeib.ib_connector import build_and_start_connector
+    from algotradeib.ib_streamer import IBDataStreamer
 
     conn = build_and_start_connector(client_id=client_id)
     streamer = IBDataStreamer(ib_connector=conn)
@@ -28,7 +28,7 @@ def get_streamer(client_id: int):
 @pytest.fixture()
 def streamer():
     pytest.importorskip("ib_insync")
-    from algotradepy.connectors.ib_connector import MASTER_CLIENT_ID
+    from algotradeib.ib_connector import MASTER_CLIENT_ID
 
     streamer = get_streamer(client_id=MASTER_CLIENT_ID)
 

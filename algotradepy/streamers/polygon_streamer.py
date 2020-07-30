@@ -52,6 +52,8 @@ class PolygonDataStreamer(ADataStreamer):
         fn_kwargs: Optional[Dict] = None,
     ):
         contract = self._validate_contract(contract=contract)
+        if fn_kwargs is None:
+            fn_kwargs = {}
 
         with self._trade_subscribers_lock:
             if contract in self._trade_subscribers:

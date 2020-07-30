@@ -9,7 +9,11 @@ import requests
 import pandas as pd
 import websocket
 
-from algotradepy.time_utils import milli_to_seconds, seconds_to_milli
+from algotradepy.time_utils import (
+    milli_to_seconds,
+    nano_to_seconds,
+    seconds_to_nano,
+)
 
 
 class PolygonRESTConnector:
@@ -40,17 +44,17 @@ class PolygonRESTConnector:
                 minute=30,
             )  # todo: localize
             ts = start_dt.timestamp()
-            params["timestamp"] = seconds_to_milli(s=ts)
+            params["timestamp"] = seconds_to_nano(s=ts)
         resp = self._make_call(endpoint=url, params=params)
         data = self._resp_to_pandas(resp=resp)
 
         while len(resp["results"]) == 50000:
-            ts = milli_to_seconds(data["y"].iloc[-1])
+            ts = nano_to_seconds(resp["results"][-1]["t"])
 
             if rth and datetime.fromtimestamp(ts).time() >= time(hour=16):
                 break
 
-            params["timestamp"] = ts
+            params["timestamp"] = resp["results"][-1]["t"]
             resp = self._make_call(endpoint=url, params=params)
             next_data = self._resp_to_pandas(resp=resp)
             data = data.append(other=next_data, ignore_index=True)
@@ -63,8 +67,8 @@ class PolygonRESTConnector:
                 hour=16,
             )
             ts = end_dt.timestamp()
-            end_ts = seconds_to_milli(s=ts)
-            data = data[data["y"] <= end_ts]
+            end_ts = seconds_to_nano(s=ts)
+            data = data[data["t"] <= end_ts]
 
         return data
 

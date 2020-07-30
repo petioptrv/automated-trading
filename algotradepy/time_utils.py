@@ -59,6 +59,11 @@ def milli_to_seconds(milli: int) -> float:
     return s
 
 
-def seconds_to_milli(s: float) -> int:
-    milli = int(s * 1e3)
-    return milli
+def nano_to_seconds(nano: int) -> float:
+    s = nano / 1e9
+    return s
+
+
+def seconds_to_nano(s: float) -> int:
+    nano = int(s * 1e9)
+    return nano

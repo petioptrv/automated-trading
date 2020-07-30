@@ -7,7 +7,11 @@ import pandas as pd
 from algotradepy.connectors.polygon_connector import PolygonRESTConnector
 from algotradepy.contracts import AContract, Exchange
 from algotradepy.historical.providers.base import AHistoricalProvider
-from algotradepy.time_utils import generate_trading_days, milli_to_seconds
+from algotradepy.time_utils import (
+    generate_trading_days,
+    milli_to_seconds,
+    nano_to_seconds,
+)
 
 
 class PolygonHistoricalProvider(AHistoricalProvider):
@@ -52,7 +56,7 @@ class PolygonHistoricalProvider(AHistoricalProvider):
 
     def _format_trades_data(self, data: pd.DataFrame) -> pd.DataFrame:
         def format_series(s: pd.Series) -> pd.Series:
-            ts = milli_to_seconds(milli=s["y"])
+            ts = nano_to_seconds(nano=s["t"])
             dt = datetime.fromtimestamp(ts)
             formatted_s = pd.Series(
                 {

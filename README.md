@@ -1,6 +1,6 @@
 # Automated Trading
 
-[![PyPI Latest Release](https://img.shields.io/pypi/v/pandas.svg)]()
+[![PyPI Latest Release](https://img.shields.io/pypi/v/algotradepy.svg)](https://pypi.org/project/algotradepy/)
 [![Build Status](https://travis-ci.com/petioptrv/automated-trading.svg?branch=master)](https://travis-ci.com/petioptrv/automated-trading)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg )](https://raw.githubusercontent.com/petioptrv/automated-trading/cicd-fixes/LICENSE.txt)
 

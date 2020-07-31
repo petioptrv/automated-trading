@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, Tuple, Dict, List, Callable
 
-from algotradeib.ib_utils import IBBase
+from algotradepy.ib_utils import IBBase
 
 try:
     import ib_insync

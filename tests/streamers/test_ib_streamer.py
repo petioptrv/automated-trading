@@ -11,7 +11,7 @@ AWAIT_TIME_OUT = 10
 def get_streamer(client_id: int):
     pytest.importorskip("ib_insync")
     from algotradepy.connectors.ib_connector import build_and_start_connector
-    from algotradeib.ib_streamer import IBDataStreamer
+    from algotradepy.streamers.ib_streamer import IBDataStreamer
 
     conn = build_and_start_connector(client_id=client_id)
     streamer = IBDataStreamer(ib_connector=conn)

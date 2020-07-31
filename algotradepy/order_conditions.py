@@ -31,12 +31,12 @@ class ACondition(ABC):
 
 class PriceCondition(ACondition):
     def __init__(
-            self,
-            contract: AContract,
-            price: float,
-            trigger_method: PriceTriggerMethod,
-            price_direction: ConditionDirection,
-            chain_type: ChainType = ChainType.AND,
+        self,
+        contract: AContract,
+        price: float,
+        trigger_method: PriceTriggerMethod,
+        price_direction: ConditionDirection,
+        chain_type: ChainType = ChainType.AND,
     ):
         super().__init__(chain_type=chain_type)
         self._contract = contract
@@ -63,10 +63,10 @@ class PriceCondition(ACondition):
 
 class DateTimeCondition(ACondition):
     def __init__(
-            self,
-            target_datetime: dt,
-            time_direction: ConditionDirection,
-            chain_type: ChainType = ChainType.AND,
+        self,
+        target_datetime: dt,
+        time_direction: ConditionDirection,
+        chain_type: ChainType = ChainType.AND,
     ):
         super().__init__(chain_type=chain_type)
         self._target_datetime = target_datetime
@@ -83,11 +83,11 @@ class DateTimeCondition(ACondition):
 
 class ExecutionCondition(ACondition):
     def __init__(
-            self,
-            contract_type: type(AContract),
-            exchange: Exchange,
-            symbol: str,
-            chain_type: ChainType = ChainType.AND,
+        self,
+        contract_type: type(AContract),
+        exchange: Exchange,
+        symbol: str,
+        chain_type: ChainType = ChainType.AND,
     ):
         super().__init__(chain_type=chain_type)
         self._contract_type = contract_type

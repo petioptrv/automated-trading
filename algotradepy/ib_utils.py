@@ -7,8 +7,8 @@ try:
     import ib_insync
 except ImportError:
     raise ImportError(
-        f"Optional package ib_insync not install. Please install"
-        f" using 'pip install ib_insync'."
+        "Optional package ib_insync not install. Please install"
+        " using 'pip install ib_insync'."
     )
 from ib_insync.util import UNSET_DOUBLE
 from ib_insync.contract import (

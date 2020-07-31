@@ -70,10 +70,7 @@ class MarketOrder(AnOrder):
         **kwargs,
     ):
         super().__init__(
-            order_id=order_id,
-            action=action,
-            quantity=quantity,
-            **kwargs
+            order_id=order_id, action=action, quantity=quantity, **kwargs
         )
 
 
@@ -84,13 +81,10 @@ class LimitOrder(AnOrder):
         quantity: float,
         limit_price: float,
         order_id: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
-            order_id=order_id,
-            action=action,
-            quantity=quantity,
-            **kwargs
+            order_id=order_id, action=action, quantity=quantity, **kwargs
         )
         self._limit_price = limit_price
 
@@ -109,16 +103,13 @@ class TrailingStopOrder(AnOrder):
         aux_price: Optional[float] = None,
         trail_percent: Optional[float] = None,
         order_id: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ):
         self._validate(
             aux_price=aux_price, trail_percent=trail_percent,
         )
         super().__init__(
-            order_id=order_id,
-            action=action,
-            quantity=quantity,
-            **kwargs
+            order_id=order_id, action=action, quantity=quantity, **kwargs
         )
         self._trail_stop_price = trail_stop_price
         self._trail_percent = trail_percent
@@ -138,7 +129,7 @@ class TrailingStopOrder(AnOrder):
 
     @staticmethod
     def _validate(
-            aux_price: Optional[float], trail_percent: Optional[float],
+        aux_price: Optional[float], trail_percent: Optional[float],
     ):
         if (trail_percent is None) == (aux_price is None):
             raise ValueError(

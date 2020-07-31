@@ -21,4 +21,3 @@ source "${CONDA_BIN}/activate" algotradepy
 
 pre-commit install
 versioneer install
-cp scripts/pre-push .git/hooks/pre-push

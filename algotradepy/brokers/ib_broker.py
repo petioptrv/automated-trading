@@ -16,7 +16,7 @@ from ibapi.account_summary_tags import (
 from ib_insync.order import Trade as _IBTrade
 
 from algotradepy.brokers.base import ABroker
-from algotradeib.ib_connector import (
+from algotradepy.connectors.ib_connector import (
     IBConnector,
     MASTER_CLIENT_ID,
     SERVER_BUFFER_TIME,

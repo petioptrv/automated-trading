@@ -13,7 +13,7 @@ except ImportError:
 from ib_insync.ticker import Ticker as _IBTicker
 
 from algotradepy.contracts import AContract, PriceType
-from algotradeib.ib_connector import IBConnector
+from algotradepy.connectors.ib_connector import IBConnector
 from algotradepy.streamers.base import ADataStreamer
 
 

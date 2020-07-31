@@ -20,20 +20,13 @@ from algotradepy.orders import (
 )
 from algotradepy.trade import TradeStatus, Trade
 from algotradepy.subscribable import Subscribable
-from tests.conftest import PROJECT_DIR
 
 AWAIT_TIME_OUT = 10
-tests_passed = 0
-
-
-def increment_tests_passed():
-    global tests_passed
-    tests_passed += 1
 
 
 def test_acc_cash():
     pytest.importorskip("ib_insync")
-    from algotradeib.ib_broker import IBBroker
+    from algotradepy.brokers.ib_broker import IBBroker
 
     broker = IBBroker()
 
@@ -44,12 +37,10 @@ def test_acc_cash():
     assert isinstance(acc_cash, float)
     np.testing.assert_allclose(acc_cash, 1e6, atol=1e5)
 
-    increment_tests_passed()
-
 
 def test_datetime():
     pytest.importorskip("ib_insync")
-    from algotradeib.ib_broker import IBBroker
+    from algotradepy.brokers.ib_broker import IBBroker
 
     from datetime import datetime
 
@@ -65,13 +56,11 @@ def test_datetime():
     assert broker_dt.min == curr_dt.min
     assert np.isclose(broker_dt.second, curr_dt.second, atol=2)
 
-    increment_tests_passed()
-
 
 def get_broker(client_id: int):
     pytest.importorskip("ib_insync")
-    from algotradeib.ib_connector import build_and_start_connector
-    from algotradeib.ib_broker import IBBroker
+    from algotradepy.connectors.ib_connector import build_and_start_connector
+    from algotradepy.brokers.ib_broker import IBBroker
 
     conn = build_and_start_connector(client_id=client_id)
     broker = IBBroker(ib_connector=conn)
@@ -82,7 +71,7 @@ def get_broker(client_id: int):
 @pytest.fixture()
 def master_broker():
     pytest.importorskip("ib_insync")
-    from algotradeib.ib_connector import MASTER_CLIENT_ID
+    from algotradepy.connectors.ib_connector import MASTER_CLIENT_ID
 
     broker = get_broker(client_id=MASTER_CLIENT_ID)
 
@@ -94,7 +83,7 @@ def master_broker():
 @pytest.fixture()
 def non_master_broker():
     pytest.importorskip("ib_insync")
-    from algotradeib.ib_connector import MASTER_CLIENT_ID
+    from algotradepy.connectors.ib_connector import MASTER_CLIENT_ID
 
     broker = get_broker(client_id=MASTER_CLIENT_ID + 1)
 
@@ -127,7 +116,7 @@ def get_ib_test_broker(client_id: int):
 @pytest.fixture()
 def master_ib_test_broker():
     pytest.importorskip("ib_insync")
-    from algotradeib.ib_connector import MASTER_CLIENT_ID
+    from algotradepy.connectors.ib_connector import MASTER_CLIENT_ID
 
     tb = get_ib_test_broker(client_id=MASTER_CLIENT_ID)
 
@@ -140,7 +129,7 @@ def master_ib_test_broker():
 @pytest.fixture()
 def non_master_ib_test_broker():
     pytest.importorskip("ib_insync")
-    from algotradeib.ib_connector import MASTER_CLIENT_ID
+    from algotradepy.connectors.ib_connector import MASTER_CLIENT_ID
 
     tb = get_ib_test_broker(client_id=MASTER_CLIENT_ID + 1)
 
@@ -203,8 +192,6 @@ def test_subscribe_to_new_trades_non_master_raises(non_master_broker):
 
     with pytest.raises(AttributeError):
         master_broker.subscribe_to_new_trades(func=dummy_fn)
-
-    increment_tests_passed()
 
 
 def test_subscribe_to_new_tws_trades(
@@ -276,8 +263,6 @@ def test_subscribe_to_new_tws_trades(
     assert order.quantity == 2
     assert order.limit_price == 1000
 
-    increment_tests_passed()
-
 
 def test_subscribe_to_trade_updates_non_master_raises(non_master_broker):
     def dummy_fn(*_, **__):
@@ -285,8 +270,6 @@ def test_subscribe_to_trade_updates_non_master_raises(non_master_broker):
 
     with pytest.raises(AttributeError):
         master_broker.subscribe_to_trade_updates(func=dummy_fn)
-
-    increment_tests_passed()
 
 
 def test_subscribe_to_tws_trade_updates(
@@ -319,8 +302,6 @@ def test_subscribe_to_tws_trade_updates(
 
     assert status.filled + status.remaining == 1
 
-    increment_tests_passed()
-
 
 def request_manual_input(msg):
     from tkinter import messagebox
@@ -334,8 +315,6 @@ def test_get_position_non_master_id_raises(
     with pytest.raises(AttributeError):
         non_master_broker.get_position(contract=spy_stock_contract)
 
-    increment_tests_passed()
-
 
 def test_get_position(
     master_broker,
@@ -345,7 +324,7 @@ def test_get_position(
     ib_mkt_buy_order_1,
     ib_mkt_sell_order_1,
 ):
-    from algotradeib.ib_connector import SERVER_BUFFER_TIME
+    from algotradepy.connectors.ib_connector import SERVER_BUFFER_TIME
 
     initial_position = master_broker.get_position(contract=spy_stock_contract)
 
@@ -370,8 +349,6 @@ def test_get_position(
     spy_position = master_broker.get_position(contract=spy_stock_contract)
 
     assert spy_position == initial_position
-
-    increment_tests_passed()
 
 
 def test_place_limit_order(master_ib_test_broker, non_master_broker):
@@ -401,8 +378,6 @@ def test_place_limit_order(master_ib_test_broker, non_master_broker):
     assert ib_trade.order.action == "BUY"
     assert ib_trade.order.lmtPrice == 20
 
-    increment_tests_passed()
-
 
 def test_receive_limit_order(non_master_ib_test_broker, master_broker):
     from ib_insync.order import LimitOrder as IBLimitOrder
@@ -429,8 +404,6 @@ def test_receive_limit_order(non_master_ib_test_broker, master_broker):
     assert trade.order.quantity == 1
     assert trade.order.action == OrderAction.BUY
     assert trade.order.limit_price == 10
-
-    increment_tests_passed()
 
 
 @pytest.mark.parametrize("aux_price,trailing_percent", [(5, None), (None, 5)])
@@ -479,8 +452,6 @@ def test_place_trailing_stop_order(
     else:
         assert ib_trade.order.trailingPercent == UNSET_DOUBLE
 
-    increment_tests_passed()
-
 
 @pytest.mark.parametrize("aux_price,trailing_percent", [(5, None), (None, 5)])
 def test_receive_trailing_stop_order(
@@ -521,8 +492,6 @@ def test_receive_trailing_stop_order(
     assert trade.order.aux_price == aux_price
     assert trade.order.trail_percent == trailing_percent
 
-    increment_tests_passed()
-
 
 def test_place_forex_order(master_ib_test_broker, non_master_broker):
     master_ib_test_broker.reqGlobalCancel()
@@ -552,8 +521,6 @@ def test_place_forex_order(master_ib_test_broker, non_master_broker):
     assert ib_trade.order.action == "BUY"
     assert ib_trade.order.lmtPrice == 1
 
-    increment_tests_passed()
-
 
 def test_receive_forex_order(non_master_ib_test_broker, master_broker):
     from ib_insync.order import LimitOrder as IBLimitOrder
@@ -580,8 +547,6 @@ def test_receive_forex_order(non_master_ib_test_broker, master_broker):
     assert trade.order.quantity == 20000
     assert trade.order.action == OrderAction.BUY
     assert trade.order.limit_price == 1
-
-    increment_tests_passed()
 
 
 @pytest.mark.parametrize(
@@ -618,16 +583,3 @@ def test_exchanges_and_currencies(
     placed, _ = non_master_broker.place_trade(trade=trade, await_confirm=True)
 
     assert isinstance(placed, bool)
-
-    increment_tests_passed()
-
-
-def test_log_all_tests_passed_ts():
-    global tests_passed
-    assert tests_passed == 33
-
-    ts_f_path = PROJECT_DIR / "test_logs" / "test_ib_broker_ts.log"
-
-    with open(file=ts_f_path, mode="w") as f:
-        ts = str(time.time())
-        f.write(ts)

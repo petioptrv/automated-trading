@@ -7,13 +7,17 @@ import logging
 
 import requests
 import pandas as pd
-import websocket
 
-from algotradepy.time_utils import (
-    milli_to_seconds,
-    nano_to_seconds,
-    seconds_to_nano,
-)
+try:
+    import websocket
+except ImportError as e:
+    raise ImportError(
+        f"Original Error: {e}"
+        "\nThe Polygon dependencies are not installed. Please reinstall using"
+        " 'pip install algotradepy[polygon]'."
+    )
+
+from algotradepy.time_utils import nano_to_seconds, seconds_to_nano
 
 
 class PolygonRESTConnector:

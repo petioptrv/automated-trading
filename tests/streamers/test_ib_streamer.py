@@ -6,17 +6,11 @@ from algotradepy.contracts import StockContract, PriceType
 from tests.conftest import PROJECT_DIR
 
 AWAIT_TIME_OUT = 10
-tests_passed = 0
-
-
-def increment_tests_passed():
-    global tests_passed
-    tests_passed += 1
 
 
 def get_streamer(client_id: int):
     pytest.importorskip("ib_insync")
-    from algotradeib.ib_connector import build_and_start_connector
+    from algotradepy.connectors.ib_connector import build_and_start_connector
     from algotradeib.ib_streamer import IBDataStreamer
 
     conn = build_and_start_connector(client_id=client_id)
@@ -28,7 +22,7 @@ def get_streamer(client_id: int):
 @pytest.fixture()
 def streamer():
     pytest.importorskip("ib_insync")
-    from algotradeib.ib_connector import MASTER_CLIENT_ID
+    from algotradepy.connectors.ib_connector import MASTER_CLIENT_ID
 
     streamer = get_streamer(client_id=MASTER_CLIENT_ID)
 
@@ -81,8 +75,6 @@ def test_subscribe_to_tick_data(streamer):
     assert ask > bid
     assert mid == (ask + bid) / 2
 
-    increment_tests_passed()
-
 
 def test_cancel_tick_data(streamer):
     mid = None
@@ -117,16 +109,3 @@ def test_cancel_tick_data(streamer):
         streamer.sleep()
 
     assert mid is None  # did not refresh again
-
-    increment_tests_passed()
-
-
-def test_log_all_tests_passed_ts():
-    global tests_passed
-    assert tests_passed == 2
-
-    ts_f_path = PROJECT_DIR / "test_logs" / "test_ib_streamer_ts.log"
-
-    with open(file=ts_f_path, mode="w") as f:
-        ts = str(time.time())
-        f.write(ts)

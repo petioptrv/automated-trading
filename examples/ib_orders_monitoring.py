@@ -1,5 +1,5 @@
-from algotradeib.ib_broker import IBBroker
-from algotradeib.ib_connector import build_and_start_connector
+from algotradepy.brokers.ib_broker import IBBroker
+from algotradepy.connectors.ib_connector import build_and_start_connector
 
 
 def monitor():

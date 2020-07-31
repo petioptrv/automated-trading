@@ -7,16 +7,20 @@ import pytest
 
 from algotradepy.contracts import StockContract
 from algotradepy.historical.loaders import HistoricalRetriever
-from algotradepy.historical.providers.polygon_provider import (
-    PolygonHistoricalProvider,
-)
-from algotradepy.historical.providers.iex_provider import IEXHistoricalProvider
 from algotradepy.historical.providers.yahoo_provider import (
     YahooHistoricalProvider,
 )
 from algotradepy.historical.transformers import HistoricalAggregator
 from algotradepy.time_utils import generate_trading_days
-from tests.conftest import TEST_DATA_DIR, PROJECT_DIR
+from tests.conftest import (
+    TEST_DATA_DIR,
+    PROJECT_DIR,
+    can_test_iex,
+    iex_api_token,
+    can_test_polygon,
+    polygon_api_token,
+    get_token,
+)
 
 
 def validate_data_range(
@@ -111,17 +115,20 @@ def test_retrieve_cached_trades():
     validate_data_range(data=data, start_date=start_date, end_date=end_date)
 
 
-API_TOKEN_FILE = PROJECT_DIR / "api_tokens" / "polygon-token.txt"
-with open(API_TOKEN_FILE) as f:
-    POLYGON_API_TOKEN = f.read()
+HIST_PROVIDERS = [YahooHistoricalProvider()]
 
-HIST_PROVIDERS = [
-    YahooHistoricalProvider(),
-    IEXHistoricalProvider(
-        api_token="Tpk_98c62e8146894c4985dfb98034d7ac87"
-    ),  # todo: remove simulation token
-    PolygonHistoricalProvider(api_token=POLYGON_API_TOKEN,),
-]
+if can_test_iex():
+    from algotradepy.historical.providers.iex_provider import (
+        IEXHistoricalProvider,
+    )
+
+    HIST_PROVIDERS.append(IEXHistoricalProvider(get_token(name="iex")))
+if can_test_polygon():
+    from algotradepy.historical.providers.polygon_provider import (
+        PolygonHistoricalProvider,
+    )
+
+    HIST_PROVIDERS.append(PolygonHistoricalProvider(get_token(name="polygon")))
 
 
 @pytest.mark.parametrize("provider", [provider for provider in HIST_PROVIDERS])

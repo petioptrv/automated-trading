@@ -1,9 +1,10 @@
 from typing import Optional
 
 from algotradepy.contracts import Exchange
+from algotradepy.utils import ReprAble, Comparable
 
 
-class Tick:
+class Tick(ReprAble, Comparable):
     def __init__(
         self,
         timestamp: float,

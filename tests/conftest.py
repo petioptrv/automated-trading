@@ -36,3 +36,52 @@ def sim_broker_runner_and_streamer_15m():
         data_consumers=[broker],
     )
     return broker, sim_runner, streamer
+
+
+def can_test_polygon() -> bool:
+    token_file = PROJECT_DIR / "api_tokens" / "polygon-token.txt"
+    can_test = True
+
+    if not token_file.exists():
+        can_test = False
+    else:
+        try:
+            import websocket
+        except ImportError:
+            can_test = False
+
+    return can_test
+
+
+def can_test_iex() -> bool:
+    token_file = PROJECT_DIR / "api_tokens" / "iex-token.txt"
+    can_test = True
+
+    if not token_file.exists():
+        can_test = False
+    else:
+        try:
+            import websocket
+        except ImportError:
+            can_test = False
+
+    return can_test
+
+
+@pytest.fixture()
+def polygon_api_token():
+    token = get_token(name="polygon")
+    return token
+
+
+@pytest.fixture()
+def iex_api_token():
+    token = get_token(name="iex")
+    return token
+
+
+def get_token(name: str) -> str:
+    token_file = PROJECT_DIR / "api_tokens" / f"{name}-token.txt"
+    with open(token_file) as f:
+        token = f.read()
+    return token

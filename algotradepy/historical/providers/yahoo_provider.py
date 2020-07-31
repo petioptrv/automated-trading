@@ -51,7 +51,12 @@ class YahooHistoricalProvider(AHistoricalProvider):
         return data
 
     def download_trades_data(
-        self, contract: AContract, start_date: date, end_date: date, **kwargs,
+        self,
+        contract: AContract,
+        start_date: date,
+        end_date: date,
+        rth: bool,
+        **kwargs,
     ):
         raise NotImplementedError("Yahoo does not provide trades data.")
 

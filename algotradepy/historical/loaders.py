@@ -306,6 +306,7 @@ class HistoricalRetriever:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         cache_only: bool = False,
+        rth: bool = True,
     ) -> pd.DataFrame:
         """Retrieves the historical data.
 
@@ -322,6 +323,8 @@ class HistoricalRetriever:
             yesterday's date to avoid storing partial historical data.
         cache_only : bool, default False
             Prevents data-download on cache-miss.
+        rth : bool, default True
+            Restrict to regular trading hours.
 
         Returns
         -------
@@ -348,6 +351,7 @@ class HistoricalRetriever:
                     contract=contract,
                     start_date=date_range[0],
                     end_date=date_range[-1],
+                    rth=rth,
                 )
                 data = data.append(range_data)
 

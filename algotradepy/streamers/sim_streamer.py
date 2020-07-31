@@ -169,7 +169,7 @@ class SimulationDataStreamer(ADataStreamer, ASimulationPiece):
         bar_data = self._get_data(contract=contract, bar_size=bar_size)
         curr_dt = self.sim_clock.datetime
         if is_daily(bar_size=bar_size):
-            bar = bar_data.loc[curr_dt.date()]
+            bar = bar_data.loc[pd.to_datetime(curr_dt.date())]
         else:
             curr_dt -= bar_size
             bar = bar_data.loc[curr_dt]

@@ -60,7 +60,12 @@ class AHistoricalProvider(ABC):
 
     @abstractmethod
     def download_trades_data(
-        self, contract: AContract, start_date: date, end_date: date, **kwargs,
+        self,
+        contract: AContract,
+        start_date: date,
+        end_date: date,
+        rth: bool,
+        **kwargs,
     ):
         """Download historical data from the provider.
 
@@ -72,6 +77,8 @@ class AHistoricalProvider(ABC):
             The start date.
         end_date : datetime.date
             The end date.
+        rth : bool, default True
+            Restrict to regular trading hours.
         kwargs
 
         Returns

@@ -48,7 +48,12 @@ class IEXHistoricalProvider(AHistoricalProvider):
         return data
 
     def download_trades_data(
-        self, contract: AContract, start_date: date, end_date: date, **kwargs,
+        self,
+        contract: AContract,
+        start_date: date,
+        end_date: date,
+        rth: bool,
+        **kwargs,
     ):
         # TODO: check if it can be implemented
         raise NotImplementedError

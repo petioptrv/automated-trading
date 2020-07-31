@@ -9,7 +9,6 @@ from algotradepy.contracts import AContract, Exchange
 from algotradepy.historical.providers.base import AHistoricalProvider
 from algotradepy.time_utils import (
     generate_trading_days,
-    milli_to_seconds,
     nano_to_seconds,
 )
 
@@ -38,7 +37,7 @@ class PolygonHistoricalProvider(AHistoricalProvider):
         contract: AContract,
         start_date: date,
         end_date: date,
-        rth: bool = True,
+        rth: bool,
         **kwargs,
     ) -> pd.DataFrame:
         data = pd.DataFrame()

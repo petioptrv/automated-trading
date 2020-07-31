@@ -39,9 +39,11 @@ setup(
             "pre-commit",
             "versioneer",
             "black",
-            "flake8",  # for Travis
-            "flake8-black",  # for Travis
+            "flake8",
+            "flake8-black",
             "twine",
+            "sphinx",
+            "sphinx_rtd_theme",
         ],
     },
     classifiers=[

@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Callable, Optional, Dict, Tuple, List
 
-from algotradepy.contracts import AContract, PriceType
+from algotradepy.contracts import AContract
 from algotradepy.orders import AnOrder
 from algotradepy.trade import TradeStatus, Trade
 
@@ -12,7 +12,7 @@ class NoPaperTradeException(Exception):
 
 
 class ABroker(ABC):
-    f"""The Abstract Broker class defining the broker interface.
+    """The Abstract Broker class defining the broker interface.
 
     Parameters
     ----------

@@ -1,3 +1,5 @@
 include versioneer.py
 include algotradepy/_version.py
 include *.txt
+include *.md
+include *.yml

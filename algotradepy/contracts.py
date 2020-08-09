@@ -7,12 +7,61 @@ from algotradepy.utils import ReprAble, Comparable
 
 
 class PriceType(Enum):
+    """The price type.
+
+    Used when requesting price updates for a given contract.
+
+    Values
+    ------
+    * MARKET
+    * ASK
+    * BID
+    """
+
     MARKET = "MARKET"
     ASK = "ASK"
     BID = "BID"
 
 
 class Exchange(Enum):
+    """The available exchanges.
+
+    Values
+    ------
+    * Automatic
+
+        * SMART
+
+    * North America
+
+        * NYSE
+        * NASDAQ
+        * AMEX
+        * ARCA
+        * TSE
+
+    * Europe
+
+        * FWB
+        * IBIS
+        * VSE
+        * LSE
+        * BATEUK
+        * ENEXT_BE
+        * SBF
+        * AEB
+
+    * Asia/Pacific
+
+        * SEHK
+        * ASX
+        * TSEJ
+
+    * Global
+
+        * FOREX
+    """
+
     SMART = "SMART"
 
     # North America
@@ -43,7 +92,28 @@ class Exchange(Enum):
 
 
 class Currency(Enum):
-    # North Americ
+    """The available currencies.
+
+    Values
+    ------
+    * North America
+
+        * USD
+        * CAD
+
+    * Europe
+
+        * EUR
+        * GBP
+
+    * Asia/Pacific
+
+        * AUD
+        * HKD
+        * JPY
+    """
+
+    # North America
     USD = "USD"
     CAD = "CAD"
 
@@ -58,11 +128,33 @@ class Currency(Enum):
 
 
 class Right(Enum):
+    """Option right.
+
+    Values
+    ------
+    * CALL
+    * PUT
+    """
+
     CALL = "CALL"
     PUT = "PUT"
 
 
 class AContract(ABC, ReprAble, Comparable):
+    """The abstract contract class defining the basic contract properties.
+
+    Parameters
+    ----------
+    symbol : str
+        The symbol for the contract.
+    con_id : int, optional, default None
+        The contract ID.
+    exchange : ~algotradepy.contracts.Exchange, default `Exchange.SMART`
+        The exchange on which this contract is traded.
+    currency : ~algotradepy.contracts.Currency, default `Currency.USD`
+        The currency of the contract.
+    """
+
     def __init__(
         self,
         symbol: str,
@@ -104,6 +196,16 @@ class AContract(ABC, ReprAble, Comparable):
 
 
 class StockContract(AContract):
+    """Defines a stock contract.
+
+    Parameters
+    ----------
+    symbol
+    con_id
+    exchange
+    currency
+    """
+
     def __init__(
         self,
         symbol: str,
@@ -117,6 +219,24 @@ class StockContract(AContract):
 
 
 class OptionContract(AContract):
+    """Defines an option contract.
+
+    Parameters
+    ----------
+    symbol
+    strike : float
+        The option's strike price.
+    right : ~algotradepy.contracts.Right
+        The option's right.
+    multiplier : float
+        The option's multiplier.
+    last_trade_date : datetime.date
+        The option contract's expiration date.
+    con_id
+    exchange
+    currency
+    """
+
     # TODO: test; todo after getting option chain...
     def __init__(
         self,

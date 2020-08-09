@@ -7,6 +7,17 @@ from algotradepy.utils import ReprAble, Comparable
 
 
 class TradeState(Enum):
+    """The possible trade states.
+
+    Values
+    ------
+    * SUBMITTED
+    * FILLED
+    * CANCELLED
+    * PENDING
+    * INACTIVE
+    """
+
     SUBMITTED = "SUBMITTED"
     FILLED = "FILLED"
     CANCELLED = "CANCELLED"
@@ -15,8 +26,20 @@ class TradeState(Enum):
 
 
 class TradeStatus(ReprAble, Comparable):
-    """
-    Semantically, associated with an order.
+    """Defines the status of an order.
+
+    Parameters
+    ----------
+    state : ~algotradepy.trade.TradeState
+        The state of the order.
+    filled : float
+        How much of the order was filled. Cannot exceed the order size.
+    remaining : float
+        How much of the order is remaining.
+    ave_fill_price : float
+        The average price at which the order was filled.
+    order_id : int, optional, default None
+        The associated order's ID.
     """
 
     def __init__(
@@ -25,7 +48,7 @@ class TradeStatus(ReprAble, Comparable):
         filled: float,
         remaining: float,
         ave_fill_price: float,
-        order_id: Optional[int],
+        order_id: Optional[int] = None,
     ):
         super().__init__()
         self._order_id = order_id
@@ -56,6 +79,18 @@ class TradeStatus(ReprAble, Comparable):
 
 
 class Trade(ReprAble):
+    """This class defines a trade.
+
+    Parameters
+    ----------
+    contract : ~algotradepy.contracts.AContract
+        The contract definition for this trade.
+    order : ~algotradepy.orders.AnOrder
+        The order definition for this trade.
+    status : ~algotradepy.trade.TradeStatus, optional, default None
+        The status of the trade.
+    """
+
     def __init__(
         self,
         contract: AContract,

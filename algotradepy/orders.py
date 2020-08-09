@@ -7,16 +7,50 @@ from algotradepy.utils import ReprAble
 
 
 class OrderAction(Enum):
+    """The available order actions.
+
+    Values
+    ------
+    * BUY
+    * SELL
+    """
+
     BUY = "BUY"
     SELL = "SELL"
 
 
 class TimeInForce(Enum):
+    """The order time-in-force options.
+
+    Values
+    ------
+    * DAY
+    * GTC
+    """
+
     DAY = "DAY"
     GTC = "GTC"
 
 
 class AnOrder(ABC, ReprAble):
+    """The abstract order class defining the basic order properties.
+
+    Parameters
+    ----------
+    action : ~algotradepy.orders.OrderAction
+        The order action.
+    quantity : float
+        The order size.
+    order_id : int, optional, default None
+        The order ID.
+    time_in_force : ~algotradepy.orders.TimeInForce, optional, default None
+        Time-in-force option.
+    conditions : list of ~algotradepy.orders.ACondition, optional, default None
+        A list of conditions attached to the order.
+    parent_id : int, optional, default None
+        The parent order's ID.
+    """
+
     def __init__(
         self,
         action: OrderAction,
@@ -62,6 +96,8 @@ class AnOrder(ABC, ReprAble):
 
 
 class MarketOrder(AnOrder):
+    """A market order definition."""
+
     def __init__(
         self,
         action: OrderAction,
@@ -75,6 +111,18 @@ class MarketOrder(AnOrder):
 
 
 class LimitOrder(AnOrder):
+    """A limit order definition.
+
+    Parameters
+    ----------
+    action
+    quantity
+    limit_price : float
+        The limit price for this order.
+    order_id
+    kwargs
+    """
+
     def __init__(
         self,
         action: OrderAction,
@@ -94,7 +142,25 @@ class LimitOrder(AnOrder):
 
 
 class TrailingStopOrder(AnOrder):
-    # TODO: document
+    """A trailing stop order definition.
+
+    Parameters
+    ----------
+    action
+    quantity
+    trail_stop_price : float, optional, default None
+        The Trailing stop price for this order.
+    aux_price : float, optional, default None
+        Can be specified instead of `trail_percent`, in which case the order is
+        executed at `aux_price` away from `trailing_stop_price`. Must be
+        provided if `trail_percent` is left blank.
+    trail_percent : float, optional, default None
+        The percentage offset from `trail_stop_price` at which to execute.
+        Must be provided if `aux_price` is not set.
+    order_id
+    kwargs
+    """
+
     def __init__(
         self,
         action: OrderAction,

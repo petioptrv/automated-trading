@@ -12,6 +12,18 @@ from algotradepy.time_utils import get_next_trading_date
 
 
 class SimulationDataStreamer(ADataStreamer, ASimulationPiece):
+    """A simulation data streamer.
+
+    This class provides data to the
+    :class:`~algotradepy.brokers.sim_broker.SimulationBroker` during a
+    simulation.
+
+    Parameters
+    ----------
+    historical_retriever : HistoricalRetriever
+        The historical retriever to use when loading historical data.
+    """
+
     def __init__(
         self, historical_retriever: Optional[HistoricalRetriever] = None,
     ):

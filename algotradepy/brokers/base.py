@@ -3,8 +3,7 @@ from datetime import datetime
 from typing import Callable, Optional, Dict, Tuple, List
 
 from algotradepy.contracts import AContract
-from algotradepy.orders import AnOrder
-from algotradepy.trade import TradeStatus, Trade
+from algotradepy.trade import Trade
 
 
 class NoPaperTradeException(Exception):
@@ -19,7 +18,7 @@ class ABroker(ABC):
     simulation : bool, default True
         If set to True, the broker instance will be set to paper-trading mode.
         If a given broker implementation does not support paper-trading, it
-        must raise {NoPaperTradeException}.
+        must raise `NoPaperTradeException`.
 
     Notes
     -----
@@ -63,15 +62,17 @@ class ABroker(ABC):
     def subscribe_to_new_trades(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
-        f"""Subscribe to being notified of all newly created orders.
+        """Subscribe to being notified of all newly created orders.
 
         The orders are transmitted only if they were successfully submitted.
 
         Parameters
         ----------
         func : Callable
-            The function to which to feed the bars. It must accept {AContract}
-            and {AnOrder} as its sole positional arguments.
+            The function to which to feed the bars. It must accept
+            :class:`~algotradepy.contracts.AContract` and
+            :class:`~algotradepy.orders.AnOrder` as its sole positional
+            arguments.
         fn_kwargs : Dict
             Keyword arguments to feed to the callback function along with the
             bars.
@@ -82,13 +83,14 @@ class ABroker(ABC):
     def subscribe_to_trade_updates(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
-        f"""Subscribe to receiving updates on orders' status.
+        """Subscribe to receiving updates on orders' status.
 
         Parameters
         ----------
         func : Callable
-            The callback function. It must accept an {TradeStatus} as its sole
-            positional argument.
+            The callback function. It must accept a
+            :class:`~algotradepy.trade.TradeStatus` as its sole positional
+            argument.
         fn_kwargs : dict
             The keyword arguments to pass to the callback function along with
             the positional arguments.

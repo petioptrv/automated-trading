@@ -16,6 +16,28 @@ from algotradepy.utils import recursive_dict_update
 
 
 class SimulationBroker(ABroker, ASimulationPiece):
+    """Implements the broker interface for simulated back-testing.
+
+    The simulation broker uses the
+    :class:`~algotradepy.streamers.sim_streamer.SimulationDataStreamer` to
+    provide simulated brokerage functionality allowing to back-test trading
+    algorithms before taking them to a live-trading environment.
+
+    Parameters
+    ----------
+    sim_streamer : SimulationDataStreamer
+        The simulation data streamer object.
+    starting_funds : float
+        The funds with which the simulation will begin.
+    transaction_cost : float
+        The cost of each transaction.
+    starting_positions : dict, optional, default None
+        A dictionary of the starting positions, mapping each symbol to
+        a dictionary of :class:`~algotradepy.contracts.Exchange` to float,
+        representing the position of that symbol for each specified exchange.
+
+    """
+
     def __init__(
         self,
         sim_streamer: SimulationDataStreamer,

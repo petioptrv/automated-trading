@@ -35,7 +35,11 @@ You can install available extension module like so:
    :maxdepth: 2
    :hidden:
 
-   base_modules
+   base/base_modules
+   sim/sim_modules
+   contracts
+   orders
+   trade
 
 
 

@@ -38,6 +38,19 @@ def sim_broker_runner_and_streamer_15m():
     return broker, sim_runner, streamer
 
 
+def can_test_ib() -> bool:
+    can_test = True
+
+    try:
+        import ib_insync
+
+        ib_insync.IB().connect()
+    except (ImportError, ConnectionRefusedError):
+        can_test = False
+
+    return can_test
+
+
 def can_test_polygon() -> bool:
     token_file = PROJECT_DIR / "api_tokens" / "polygon-token.txt"
     can_test = True

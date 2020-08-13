@@ -1,5 +1,6 @@
 from datetime import date, timedelta, datetime
 from typing import Dict
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -54,22 +55,14 @@ class PolygonHistoricalProvider(AHistoricalProvider):
         return data
 
     def _format_trades_data(self, data: pd.DataFrame) -> pd.DataFrame:
-        def format_series(s: pd.Series) -> pd.Series:
-            ts = nano_to_seconds(nano=s["t"])
-            dt = datetime.fromtimestamp(ts)
-            formatted_s = pd.Series(
-                {
-                    "datetime": pd.to_datetime(dt),
-                    "timestamp": ts,
-                    "exchange": self._exchange_mapping.get(s["x"], np.nan),
-                    "size": s["s"],
-                    "price": s["p"],
-                }
-            )
-            return formatted_s
-
-        data = data.apply(format_series, axis=1)
-        data = data.set_index(keys="datetime")
+        data["timestamp"] = data["t"] / 1e9
+        data.index = pd.to_datetime(data["t"], unit="ns")
+        data.index.name = "datetime"
+        data = data.rename({"s": "size", "p": "price"}, axis=1)
+        data["exchange"] = data["x"].apply(
+            partial(self._exchange_mapping.get, np.nan),
+        )
+        data = data.loc[:, ["timestamp", "exchange", "size", "price"]]
 
         return data
 

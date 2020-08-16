@@ -502,15 +502,15 @@ class IBBase:
         self._validate_bar_size(bar_size=bar_size)
 
         if bar_size == timedelta(seconds=1):
-            bar_size_str = f"1 secs"
+            bar_size_str = "1 secs"
         elif bar_size < timedelta(minutes=1):
             bar_size_str = f"{bar_size.seconds} secs"
         elif bar_size == timedelta(minutes=1):
-            bar_size_str = f"1 min"
+            bar_size_str = "1 min"
         elif bar_size < timedelta(hours=1):
             bar_size_str = f"{bar_size.seconds // 60} mins"
         elif bar_size == timedelta(hours=1):
-            bar_size_str = f"1 hour"
+            bar_size_str = "1 hour"
         elif bar_size < timedelta(days=1):
             bar_size_str = f"{bar_size.seconds // 60 // 60} hours"
         elif bar_size == timedelta(days=1):

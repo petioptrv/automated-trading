@@ -201,6 +201,11 @@ def test_retrieve_non_cached_trades_data(tmpdir, provider):
     validate_data_range(data=data, start_date=start_date, end_date=end_date)
 
 
+@pytest.mark.skipif(
+    len(generate_trading_days(start_date=date.today(), end_date=date.today()))
+    == 0,
+    reason="Today is not a trading day.",
+)
 @pytest.mark.parametrize("provider", [provider for provider in HIST_PROVIDERS])
 def test_retrieve_non_cached_trades_data_today_partial(tmpdir, provider):
     end_date = date.today()

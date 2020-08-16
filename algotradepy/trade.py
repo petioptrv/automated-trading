@@ -50,7 +50,8 @@ class TradeStatus(ReprAble, Comparable):
         ave_fill_price: float,
         order_id: Optional[int] = None,
     ):
-        super().__init__()
+        ReprAble.__init__(self)
+        Comparable.__init__(self)
         self._order_id = order_id
         self._state = state
         self._filled = filled
@@ -62,19 +63,19 @@ class TradeStatus(ReprAble, Comparable):
         return self._order_id
 
     @property
-    def state(self):
+    def state(self) -> TradeState:
         return self._state
 
     @property
-    def filled(self):
+    def filled(self) -> float:
         return self._filled
 
     @property
-    def remaining(self):
+    def remaining(self) -> float:
         return self._remaining
 
     @property
-    def ave_fill_price(self):
+    def ave_fill_price(self) -> float:
         return self._ave_fill_price
 
 

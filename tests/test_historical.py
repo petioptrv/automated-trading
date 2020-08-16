@@ -177,7 +177,10 @@ def test_retrieve_non_cached_intraday(tmpdir, provider):
         return
 
     validate_data_range(data=data, start_date=start_date, end_date=end_date)
-    assert np.isclose(len(data), 5 * 6.5 * 60, atol=7 * 60)
+    assert (
+        np.isclose(len(data), 5 * 6.5 * 60, atol=7 * 60)
+        or len(data) == 4800  # for outside RTHs IB
+    )
 
 
 @pytest.mark.parametrize("provider", [provider for provider in HIST_PROVIDERS])
@@ -218,7 +221,7 @@ def test_retrieve_non_cached_trades_data_today_partial(tmpdir, provider):
         return
 
     validate_data_range(data=data, start_date=start_date, end_date=end_date)
-    assert data.iloc[-1].name == pd.to_datetime(date.today())
+    assert data.iloc[-1].name.date() == date.today()
 
 
 @pytest.mark.parametrize("provider", [provider for provider in HIST_PROVIDERS])

@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from typing import Optional
 
 import pandas as pd
+from algotradepy.historical.hist_utils import is_daily
 from ib_insync import util
 
 from algotradepy.connectors import IBConnector
@@ -28,6 +29,7 @@ class IBHistoricalProvider(IBBase, AHistoricalProvider):
         start_date: date,
         end_date: date,
         bar_size: timedelta,
+        rth: bool,
         **kwargs,
     ) -> pd.DataFrame:
         ib_contract = self._to_ib_contract(contract=contract)
@@ -43,18 +45,10 @@ class IBHistoricalProvider(IBBase, AHistoricalProvider):
             whatToShow="MIDPOINT",
             useRTH=False,
         )
-        ib_data_df = util.df(objs=bar_data)
+        data = util.df(objs=bar_data)
 
-        # TODO: test!!!!
-        data = pd.DataFrame(
-            data={
-                "open": ib_data_df["Open"],
-                "high": ib_data_df["High"],
-                "low": ib_data_df["Low"],
-                "close": ib_data_df["Close"],
-                "volume": ib_data_df["Volume"],
-            }
-        )
+        if len(data) != 0:
+            data = self._format_data(data=data)
 
         return data
 
@@ -67,3 +61,16 @@ class IBHistoricalProvider(IBBase, AHistoricalProvider):
         **kwargs,
     ):
         raise NotImplementedError  # TODO: implement
+
+    def _format_data(self, data: pd.DataFrame) -> pd.DataFrame:
+        data["date"] = pd.to_datetime(data["date"])
+        data = data.set_index("date")
+        data.index.name = "datetime"
+        data.index = data.index.tz_localize(None)
+
+        remaining_cols = [
+            col for col in data.columns if col not in self._MAIN_BAR_COLS
+        ]
+        data = data.loc[:, self._MAIN_BAR_COLS + remaining_cols]
+
+        return data

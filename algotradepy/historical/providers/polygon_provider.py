@@ -28,6 +28,7 @@ class PolygonHistoricalProvider(AHistoricalProvider):
         start_date: date,
         end_date: date,
         bar_size: timedelta,
+        rth: bool,
         **kwargs,
     ) -> pd.DataFrame:
         # TODO: implement

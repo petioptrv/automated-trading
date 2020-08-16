@@ -29,8 +29,10 @@ class IEXHistoricalProvider(AHistoricalProvider):
         start_date: date,
         end_date: date,
         bar_size: timedelta,
+        rth: bool,
         **kwargs,
     ):
+        # TODO: test rth
         data = pd.DataFrame()
         dates = generate_trading_days(start_date=start_date, end_date=end_date)
         for date_ in dates:

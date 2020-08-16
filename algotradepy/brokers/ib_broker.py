@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Optional, Tuple, Dict, List, Callable
 
 from algotradepy.ib_utils import IBBase
+from algotradepy.position import Position
 
 try:
     import ib_insync
@@ -88,6 +89,16 @@ class IBBroker(IBBase, ABroker):
             for ib_trade in open_ib_trades
         ]
         return open_trades
+
+    @property
+    def open_positions(self) -> List[Position]:
+        # TODO: test
+        ib_positions = self._ib_conn.positions()
+        positions = [
+            self._from_ib_position(ib_position=ib_pos)
+            for ib_pos in ib_positions
+        ]
+        return positions
 
     def subscribe_to_new_trades(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,

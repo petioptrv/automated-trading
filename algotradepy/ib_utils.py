@@ -3,6 +3,8 @@ from datetime import date, datetime, timedelta
 from typing import Optional, Type
 import logging
 
+from algotradepy.position import Position
+
 try:
     import ib_insync
 except ImportError:
@@ -27,6 +29,7 @@ from ib_insync.order import (
     TimeCondition as _IBTimeCondition,
     ExecutionCondition as _IBExecutionCondition,
 )
+from ib_insync import Position as _IBPosition
 
 from algotradepy.connectors.ib_connector import (
     IBConnector,
@@ -99,7 +102,8 @@ class IBBase:
             self._ib_conn = ib_connector
 
     def __del__(self):
-        self._ib_conn.disconnect()
+        if hasattr(self, "_ib_conn"):
+            self._ib_conn.disconnect()
 
     def sleep(self, secs: float = SERVER_BUFFER_TIME):
         self._ib_conn.sleep(secs)
@@ -485,11 +489,20 @@ class IBBase:
         ib_currency = currency.value
         return ib_currency
 
+    def _from_ib_position(self, ib_position: _IBPosition) -> Position:
+        contract = self._from_ib_contract(ib_contract=ib_position.contract)
+        pos = Position(
+            contract=contract,
+            position=ib_position.position,
+            ave_fill_price=ib_position.avgCost,
+        )
+        return pos
+
     def _to_ib_bar_size(self, bar_size: timedelta) -> str:
         self._validate_bar_size(bar_size=bar_size)
 
         if bar_size == timedelta(seconds=1):
-            bar_size_str = f"1 sec"
+            bar_size_str = f"1 secs"
         elif bar_size < timedelta(minutes=1):
             bar_size_str = f"{bar_size.seconds} secs"
         elif bar_size == timedelta(minutes=1):

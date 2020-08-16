@@ -72,7 +72,7 @@ class PolygonRESTConnector:
             )
             ts = end_dt.timestamp()
             end_ts = seconds_to_nano(s=ts)
-            data = data[data["t"] <= end_ts]
+            data = data[data.loc[:, "t"] <= end_ts]
 
         return data
 

@@ -14,12 +14,10 @@ from algotradepy.historical.transformers import HistoricalAggregator
 from algotradepy.time_utils import generate_trading_days
 from tests.conftest import (
     TEST_DATA_DIR,
-    PROJECT_DIR,
     can_test_iex,
-    iex_api_token,
     can_test_polygon,
-    polygon_api_token,
     get_token,
+    can_test_ib,
 )
 
 
@@ -123,12 +121,20 @@ if can_test_iex():
     )
 
     HIST_PROVIDERS.append(IEXHistoricalProvider(get_token(name="iex")))
+
 if can_test_polygon():
     from algotradepy.historical.providers.polygon_provider import (
         PolygonHistoricalProvider,
     )
 
     HIST_PROVIDERS.append(PolygonHistoricalProvider(get_token(name="polygon")))
+
+if can_test_ib():
+    from algotradepy.historical.providers.ib_provider import (
+        IBHistoricalProvider,
+    )
+
+    HIST_PROVIDERS.append(IBHistoricalProvider())
 
 
 @pytest.mark.parametrize("provider", [provider for provider in HIST_PROVIDERS])
@@ -171,7 +177,10 @@ def test_retrieve_non_cached_intraday(tmpdir, provider):
         return
 
     validate_data_range(data=data, start_date=start_date, end_date=end_date)
-    assert np.isclose(len(data), 5 * 6.5 * 60, atol=7 * 60)
+    assert (
+        np.isclose(len(data), 5 * 6.5 * 60, atol=7 * 60)
+        or len(data) == 4800  # for outside RTHs IB
+    )
 
 
 @pytest.mark.parametrize("provider", [provider for provider in HIST_PROVIDERS])
@@ -190,6 +199,34 @@ def test_retrieve_non_cached_trades_data(tmpdir, provider):
         return
 
     validate_data_range(data=data, start_date=start_date, end_date=end_date)
+
+
+@pytest.mark.skipif(
+    len(generate_trading_days(start_date=date.today(), end_date=date.today()))
+    == 0,
+    reason="Today is not a trading day.",
+)
+@pytest.mark.parametrize("provider", [provider for provider in HIST_PROVIDERS])
+def test_retrieve_non_cached_trades_data_today_partial(tmpdir, provider):
+    end_date = date.today()
+    start_date = end_date - timedelta(days=1)
+
+    retriever = HistoricalRetriever(provider=provider, hist_data_dir=tmpdir)
+    contract = StockContract(symbol="SPY")
+
+    try:
+        data = retriever.retrieve_trades_data(
+            contract=contract,
+            start_date=start_date,
+            end_date=end_date,
+            allow_partial=True,
+            rth=False,
+        )
+    except NotImplementedError:
+        return
+
+    validate_data_range(data=data, start_date=start_date, end_date=end_date)
+    assert data.iloc[-1].name.date() == date.today()
 
 
 @pytest.mark.parametrize("provider", [provider for provider in HIST_PROVIDERS])

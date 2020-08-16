@@ -27,6 +27,7 @@ class PolygonDataStreamer(ADataStreamer):
         bar_size: timedelta,
         func: Callable,
         fn_kwargs: Optional[dict] = None,
+        rth: bool = False,
     ):
         raise NotImplementedError
 

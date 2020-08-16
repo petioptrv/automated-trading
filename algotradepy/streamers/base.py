@@ -13,6 +13,7 @@ class ADataStreamer(ABC):
         bar_size: timedelta,
         func: Callable,
         fn_kwargs: Optional[dict] = None,
+        rth: bool = False,
     ):
         """Subscribe to receiving historical bar data.
 
@@ -29,6 +30,8 @@ class ADataStreamer(ABC):
         fn_kwargs : Dict
             Keyword arguments to feed to the callback function along with the
             bars.
+        rth : bool, default False
+            Whether to return regular trading hours only.
         """
         raise NotImplementedError
 

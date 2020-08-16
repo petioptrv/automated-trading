@@ -24,9 +24,11 @@ class YahooHistoricalProvider(AHistoricalProvider):
         contract: AContract,
         start_date: date,
         end_date: date,
-        bar_size: Optional[timedelta] = None,
+        bar_size: timedelta,
+        rth: bool,
         **kwargs,
     ) -> pd.DataFrame:
+        # TODO: test rth
         import pandas_datareader as pdr
         import yfinance as yf
 

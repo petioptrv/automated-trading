@@ -1,7 +1,9 @@
 import calendar
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional, Type
 import logging
+
+from algotradepy.position import Position
 
 try:
     import ib_insync
@@ -27,6 +29,7 @@ from ib_insync.order import (
     TimeCondition as _IBTimeCondition,
     ExecutionCondition as _IBExecutionCondition,
 )
+from ib_insync import Position as _IBPosition
 
 from algotradepy.connectors.ib_connector import (
     IBConnector,
@@ -99,7 +102,8 @@ class IBBase:
             self._ib_conn = ib_connector
 
     def __del__(self):
-        self._ib_conn.disconnect()
+        if hasattr(self, "_ib_conn"):
+            self._ib_conn.disconnect()
 
     def sleep(self, secs: float = SERVER_BUFFER_TIME):
         self._ib_conn.sleep(secs)
@@ -484,3 +488,65 @@ class IBBase:
     def _to_ib_currency(currency: Currency) -> str:
         ib_currency = currency.value
         return ib_currency
+
+    def _from_ib_position(self, ib_position: _IBPosition) -> Position:
+        contract = self._from_ib_contract(ib_contract=ib_position.contract)
+        pos = Position(
+            contract=contract,
+            position=ib_position.position,
+            ave_fill_price=ib_position.avgCost,
+        )
+        return pos
+
+    def _to_ib_bar_size(self, bar_size: timedelta) -> str:
+        self._validate_bar_size(bar_size=bar_size)
+
+        if bar_size == timedelta(seconds=1):
+            bar_size_str = "1 secs"
+        elif bar_size < timedelta(minutes=1):
+            bar_size_str = f"{bar_size.seconds} secs"
+        elif bar_size == timedelta(minutes=1):
+            bar_size_str = "1 min"
+        elif bar_size < timedelta(hours=1):
+            bar_size_str = f"{bar_size.seconds // 60} mins"
+        elif bar_size == timedelta(hours=1):
+            bar_size_str = "1 hour"
+        elif bar_size < timedelta(days=1):
+            bar_size_str = f"{bar_size.seconds // 60 // 60} hours"
+        elif bar_size == timedelta(days=1):
+            bar_size_str = "1 day"
+        else:
+            raise ValueError(f"Unsupported bar size {bar_size}.")
+
+        return bar_size_str
+
+    @staticmethod
+    def _validate_bar_size(bar_size: timedelta):
+        valid_sizes = [
+            timedelta(seconds=1),
+            timedelta(seconds=5),
+            timedelta(seconds=10),
+            timedelta(seconds=15),
+            timedelta(seconds=30),
+            timedelta(minutes=1),
+            timedelta(minutes=2),
+            timedelta(minutes=3),
+            timedelta(minutes=5),
+            timedelta(minutes=15),
+            timedelta(minutes=20),
+            timedelta(minutes=30),
+            timedelta(hours=1),
+            timedelta(hours=2),
+            timedelta(hours=3),
+            timedelta(hours=4),
+            timedelta(hours=8),
+            timedelta(days=1),
+            timedelta(weeks=1),
+            timedelta(days=30),
+        ]
+
+        if bar_size not in valid_sizes:
+            raise ValueError(
+                f"Got invalid bar size {bar_size}."
+                f" Valid bar sizes are {valid_sizes}."
+            )

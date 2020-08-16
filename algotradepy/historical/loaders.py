@@ -1,5 +1,5 @@
 import os
-from datetime import date, timedelta
+from datetime import date, timedelta, time
 from pathlib import Path
 from typing import Optional, List
 
@@ -243,6 +243,9 @@ class HistoricalRetriever:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         cache_only: bool = False,
+        cache_downloads: bool = True,
+        rth: bool = True,
+        allow_partial: bool = False,
     ) -> pd.DataFrame:
         """Retrieves the historical data.
 
@@ -260,6 +263,13 @@ class HistoricalRetriever:
             yesterday's date to avoid storing partial historical data.
         cache_only : bool, default False
             Prevents data-download on cache-miss.
+        cache_downloads : bool, default True
+            Whether to cache downloaded data.
+        rth : bool, default True
+            Restrict to regular trading hours.
+        allow_partial : bool, default False
+            Allows downloading of partial data for today's date. This partial
+            data is never cached.
 
         Returns
         -------
@@ -267,15 +277,24 @@ class HistoricalRetriever:
             The requested historical data.
         """
         if end_date == date.today():
-            end_date -= timedelta(days=1)
+            if not allow_partial:
+                end_date -= timedelta(days=1)
+                end_cache_date = end_date
+            else:
+                end_cache_date = end_date - timedelta(days=1)
+        else:
+            end_cache_date = end_date
 
-        data = self._cache_handler.get_cached_bar_data(
-            contract=contract,
-            start_date=start_date,
-            end_date=end_date,
-            bar_size=bar_size,
-            schema_v=AHistoricalProvider.BARS_SCHEMA_V,
-        )
+        if end_cache_date >= start_date:
+            data = self._cache_handler.get_cached_bar_data(
+                contract=contract,
+                start_date=start_date,
+                end_date=end_date,
+                bar_size=bar_size,
+                schema_v=AHistoricalProvider.BARS_SCHEMA_V,
+            )
+        else:
+            data = pd.DataFrame()
 
         if not cache_only:
             date_ranges = self._get_missing_date_ranges(
@@ -288,15 +307,25 @@ class HistoricalRetriever:
                     start_date=date_range[0],
                     end_date=date_range[-1],
                     bar_size=bar_size,
+                    rth=False,
                 )
                 data = data.append(range_data)
 
-                self._cache_handler.cache_bar_data(
-                    data=range_data,
-                    contract=contract,
-                    bar_size=bar_size,
-                    schema_v=AHistoricalProvider.BARS_SCHEMA_V,
-                )
+                if cache_downloads:
+                    range_data = range_data[
+                        range_data.index <= pd.to_datetime(end_cache_date)
+                    ]
+                    self._cache_handler.cache_bar_data(
+                        data=range_data,
+                        contract=contract,
+                        bar_size=bar_size,
+                        schema_v=AHistoricalProvider.BARS_SCHEMA_V,
+                    )
+
+        if rth and not is_daily(bar_size=bar_size):
+            data = data.between_time(
+                start_time=time(9, 30), end_time=time(16), include_end=False,
+            )
 
         return data
 
@@ -306,7 +335,9 @@ class HistoricalRetriever:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         cache_only: bool = False,
+        cache_downloads: bool = True,
         rth: bool = True,
+        allow_partial: bool = False,
     ) -> pd.DataFrame:
         """Retrieves the historical data.
 
@@ -319,12 +350,17 @@ class HistoricalRetriever:
         contract : AContract
         start_date : datetime.date, optional, default None
         end_date : datetime.date, optional, default None
-            If the end date is set to today's date, it will be adjusted to
-            yesterday's date to avoid storing partial historical data.
+            If the end date is set to today's date and `allow_partial` is set
+            to `False`, the end-date will be adjusted to yesterday's date.
         cache_only : bool, default False
             Prevents data-download on cache-miss.
+        cache_downloads : bool, default True
+            Whether to cache downloaded data.
         rth : bool, default True
             Restrict to regular trading hours.
+        allow_partial : bool, default False
+            Allows downloading of partial data for today's date. This partial
+            data is never cached.
 
         Returns
         -------
@@ -332,14 +368,23 @@ class HistoricalRetriever:
             The requested historical data.
         """
         if end_date == date.today():
-            end_date -= timedelta(days=1)
+            if not allow_partial:
+                end_date -= timedelta(days=1)
+                end_cache_date = end_date
+            else:
+                end_cache_date = end_date - timedelta(days=1)
+        else:
+            end_cache_date = end_date
 
-        data = self._cache_handler.get_cached_trades_data(
-            contract=contract,
-            start_date=start_date,
-            end_date=end_date,
-            schema_v=AHistoricalProvider.TRADES_SCHEMA_V,
-        )
+        if end_cache_date >= start_date:
+            data = self._cache_handler.get_cached_trades_data(
+                contract=contract,
+                start_date=start_date,
+                end_date=end_cache_date,
+                schema_v=AHistoricalProvider.TRADES_SCHEMA_V,
+            )
+        else:
+            data = pd.DataFrame()
 
         if not cache_only:
             date_ranges = self._get_missing_date_ranges(
@@ -355,11 +400,15 @@ class HistoricalRetriever:
                 )
                 data = data.append(range_data)
 
-                self._cache_handler.cache_trades_data(
-                    data=range_data,
-                    contract=contract,
-                    schema_v=AHistoricalProvider.TRADES_SCHEMA_V,
-                )
+                if cache_downloads:
+                    range_data = range_data[
+                        range_data.index <= pd.to_datetime(end_cache_date)
+                    ]
+                    self._cache_handler.cache_trades_data(
+                        data=range_data,
+                        contract=contract,
+                        schema_v=AHistoricalProvider.TRADES_SCHEMA_V,
+                    )
 
         return data
 

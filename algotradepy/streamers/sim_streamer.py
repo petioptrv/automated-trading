@@ -46,7 +46,9 @@ class SimulationDataStreamer(ADataStreamer, ASimulationPiece):
         bar_size: timedelta,
         func: Callable,
         fn_kwargs: Optional[dict] = None,
+        rth: bool = False,
     ):
+        # TODO: address rth functionality
         if bar_size < self.sim_clock.time_step:
             raise NotImplementedError(
                 f"Attempted to register for a bar-size of {bar_size} in a"

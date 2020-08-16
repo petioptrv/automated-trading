@@ -1,5 +1,10 @@
-from datetime import timedelta
+import logging
+from datetime import timedelta, datetime
+from functools import partial
 from typing import Optional, Dict, Callable
+
+from ib_insync import BarDataList
+from ib_insync.util import df
 
 from algotradepy.ib_utils import IBBase
 
@@ -41,8 +46,10 @@ class IBDataStreamer(ADataStreamer, IBBase):
     ):
         IBBase.__init__(self, simulation=simulation, ib_connector=ib_connector)
 
-        # {contract: {func: price_type}}
-        self._price_subscriptions: Optional[Dict] = None
+        # {contract: {func: {"price_type": price_type, "kwargs": kwargs}}}
+        self._price_subscriptions = {}
+        # {contract: {"bars": BarDataList, "funcs": {func: kwargs}}}
+        self._bars_subscriptions = {}
         self._market_data_type_set = False
 
     def subscribe_to_bars(
@@ -51,12 +58,76 @@ class IBDataStreamer(ADataStreamer, IBBase):
         bar_size: timedelta,
         func: Callable,
         fn_kwargs: Optional[dict] = None,
+        rth: bool = True,
     ):
-        # TODO: implement
-        raise NotImplementedError
+        # TODO: test all the different bar sizes
+        if fn_kwargs is None:
+            fn_kwargs = {}
+
+        self._set_market_data_type()
+
+        def bars_update(
+            bars_: BarDataList, has_new_bar: bool, contract_: AContract,
+        ):
+            assert contract_ in self._bars_subscriptions
+            if not has_new_bar:
+                return
+
+            bars_df = df(bars_[-1:])
+            bars_df = bars_df.set_index("date")
+            bar_s = bars_df.iloc[0]
+
+            funcs_dict_ = self._bars_subscriptions[contract_]["funcs"]
+
+            for func_, kwargs_ in funcs_dict_.items():
+                func_(bar_s, **kwargs_)
+
+            while len(bars_) != 0:
+                bars_.pop()
+
+        previously_requested = contract in self._bars_subscriptions
+
+        con_subs = self._bars_subscriptions.setdefault(contract, {})
+        funcs_dict = con_subs.setdefault("funcs", {})
+        funcs_dict[func] = fn_kwargs
+
+        if not previously_requested:
+            ib_contract = self._to_ib_contract(contract=contract)
+            ib_duration = self._get_bars_duration_str(bar_size=bar_size)
+            ib_bar_size = self._to_ib_bar_size(bar_size=bar_size)
+            bars = self._ib_conn.reqHistoricalData(
+                contract=ib_contract,
+                endDateTime="",
+                durationStr=ib_duration,
+                barSizeSetting=ib_bar_size,
+                whatToShow="MIDPOINT",
+                useRTH=rth,
+                keepUpToDate=True,
+            )
+            bars.updateEvent += partial(bars_update, contract_=contract)
+            con_subs["bars"] = bars
 
     def cancel_bars(self, contract: AContract, func: Callable):
-        raise NotImplementedError
+        if self._market_data_type_set is None:
+            raise RuntimeError("No price subscriptions were requested.")
+
+        found = False
+        for sub_contract, sub_dict in self._bars_subscriptions.items():
+            if contract == sub_contract and func in sub_dict:
+                found = True
+                del sub_dict[func]
+                if len(sub_dict) == 1:
+                    self._cancel_bars_subscription(
+                        bars=sub_dict["bars"], contract=contract,
+                    )
+                    del sub_dict["bars"]
+                break
+
+        if not found:
+            raise ValueError(
+                f"No bars subscription found for contract {contract} and"
+                f" function {func}."
+            )
 
     def subscribe_to_tick_data(
         self,
@@ -76,7 +147,10 @@ class IBDataStreamer(ADataStreamer, IBBase):
 
             con_subs_ = self._price_subscriptions[contract_]
 
-            for func_, price_type_ in con_subs_.items():
+            for func_, func_dict_ in con_subs_.items():
+                price_type_ = func_dict_["price_type"]
+                fn_kwargs_ = func_dict_["kwargs"]
+
                 if price_type_ == PriceType.MARKET:
                     price_ = ticker.midpoint()
                 elif price_type_ == PriceType.ASK:
@@ -86,12 +160,12 @@ class IBDataStreamer(ADataStreamer, IBBase):
                 else:
                     raise TypeError(f"Unknown price type {price_type_}.")
 
-                func_(contract_, price_, **fn_kwargs)
+                func_(contract_, price_, **fn_kwargs_)
 
         previously_requested = contract in self._price_subscriptions
 
         con_subs = self._price_subscriptions.setdefault(contract, {})
-        con_subs[func] = price_type
+        con_subs[func] = {"price_type": price_type, "kwargs": fn_kwargs}
 
         if not previously_requested:
             ib_contract = self._to_ib_contract(contract=contract)
@@ -140,15 +214,36 @@ class IBDataStreamer(ADataStreamer, IBBase):
         if not self._market_data_type_set:
             self._ib_conn.reqMarketDataType(marketDataType=4)
             self._market_data_type_set = True
-            self._price_subscriptions = {}
-
-    def _cancel_all_price_subscriptions(self):
-        if self._price_subscriptions is not None:
-            sub_contracts = list(self._price_subscriptions.keys())
-            for sub_contract in sub_contracts:
-                self._cancel_price_subscription(contract=sub_contract)
 
     def _cancel_price_subscription(self, contract: AContract):
         ib_contract = self._to_ib_contract(contract=contract)
         self._ib_conn.cancelMktData(contract=ib_contract)
         del self._price_subscriptions[contract]
+
+    def _cancel_bars_subscription(
+        self, bars: BarDataList, contract: AContract
+    ):
+        self._ib_conn.cancelHistoricalData(bars=bars)
+        del self._bars_subscriptions[contract]
+
+    def _get_bars_duration_str(self, bar_size: timedelta) -> str:
+        self._validate_bar_size(bar_size=bar_size)
+
+        if bar_size == timedelta(seconds=1):
+            raise NotImplementedError(
+                "Bars of size 1 second not currently supported with IB."
+            )
+        elif bar_size <= timedelta(minutes=1):
+            duration_str = "60 S"
+        elif timedelta(minutes=1) < bar_size < timedelta(hours=1):
+            duration_str = "1 H"
+        elif timedelta(hours=1) <= bar_size < timedelta(days=1):
+            duration_str = "1 D"
+        elif timedelta(days=1):
+            duration_str = "2 D"
+        else:
+            raise NotImplementedError(
+                "Bars of more than 1 day are not currently supported with IB."
+            )
+
+        return duration_str

@@ -1,9 +1,9 @@
 import time
+from datetime import datetime, timedelta
 
 import pytest
 
 from algotradepy.contracts import StockContract, PriceType
-from tests.conftest import PROJECT_DIR
 
 AWAIT_TIME_OUT = 10
 
@@ -29,6 +29,65 @@ def streamer():
     yield streamer
 
     streamer.__del__()
+
+
+@pytest.mark.parametrize(
+    "bar_size",
+    [
+        timedelta(seconds=5),
+        timedelta(seconds=10),
+        timedelta(minutes=1),
+        timedelta(minutes=2),
+    ],
+)
+def test_subscribe_to_bars_data(streamer, bar_size):
+    latest = None
+
+    def update(bar):
+        nonlocal latest
+        latest = bar
+
+    contract = StockContract(symbol="SPY")
+    streamer.subscribe_to_bars(
+        contract=contract, bar_size=bar_size, func=update, rth=False,
+    )
+
+    streamer.sleep(bar_size.seconds + 10)
+
+    assert latest is not None
+    assert latest.name > datetime.now() - bar_size - timedelta(seconds=10)
+
+    streamer.sleep(bar_size.seconds)
+
+    assert latest is not None
+    assert latest.name > datetime.now() - bar_size
+
+
+def test_cancel_bars_data(streamer):
+    latest = None
+
+    def update(bar):
+        nonlocal latest
+        latest = bar
+
+    contract = StockContract(symbol="SPY")
+    streamer.subscribe_to_bars(
+        contract=contract,
+        bar_size=timedelta(seconds=5),
+        func=update,
+        rth=False,
+    )
+
+    streamer.sleep(15)
+
+    assert latest is not None
+    assert latest.name > datetime.now() - timedelta(seconds=15)
+
+    streamer.cancel_bars(contract=contract, func=update)
+    last_latest = latest
+    streamer.sleep(15)
+
+    assert last_latest.name == latest.name
 
 
 def test_subscribe_to_tick_data(streamer):

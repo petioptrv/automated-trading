@@ -35,6 +35,7 @@ class AHistoricalProvider(ABC):
         start_date: date,
         end_date: date,
         bar_size: timedelta,
+        rth: bool,
         **kwargs,
     ) -> pd.DataFrame:
         """Download historical data from the provider.
@@ -49,6 +50,8 @@ class AHistoricalProvider(ABC):
             The end date.
         bar_size : datetime.timedelta
             The bar size.
+        rth : bool, default True
+            Restrict to regular trading hours.
         kwargs
 
         Returns

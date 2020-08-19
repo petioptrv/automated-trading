@@ -210,7 +210,8 @@ class IBBase:
 
     @staticmethod
     def _from_ib_order(ib_order: _IBOrder) -> Optional[AnOrder]:
-        if isinstance(ib_order, _IBOrder):
+        # TODO: test
+        if not isinstance(ib_order, _IBOrder):
             logging.warning(
                 f"Received poorly defined order from IB: {ib_order}."
             )

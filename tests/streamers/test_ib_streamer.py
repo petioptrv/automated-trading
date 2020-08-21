@@ -64,10 +64,13 @@ def test_subscribe_to_bars_data(streamer, bar_size):
     assert latest is not None
     assert latest.name > datetime.now() - bar_size - timedelta(seconds=10)
 
+    prev = latest.copy()
+    latest = None
     streamer.sleep(bar_size.seconds)
 
     assert latest is not None
     assert latest.name > datetime.now() - bar_size
+    assert latest.name > prev.name
 
 
 def test_cancel_bars_data(streamer):

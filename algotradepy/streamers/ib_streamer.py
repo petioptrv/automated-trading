@@ -86,8 +86,8 @@ class IBDataStreamer(ADataStreamer, IBBase):
             for func_, kwargs_ in funcs_dict_.items():
                 func_(bar_s, **kwargs_)
 
-            while len(bars_) != 0:
-                bars_.pop()
+            while len(bars_) != 1:
+                bars_.pop(0)
 
         previously_requested = contract in self._bars_subscriptions
 

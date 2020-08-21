@@ -97,7 +97,9 @@ class IBDataStreamer(ADataStreamer, IBBase):
 
         if not previously_requested:
             ib_contract = self._to_ib_contract(contract=contract)
-            ib_duration = self._get_bars_duration_str(bar_size=bar_size)
+            ib_duration = self._get_bars_subscription_duration_str(
+                bar_size=bar_size
+            )
             ib_bar_size = self._to_ib_bar_size(bar_size=bar_size)
             bars = self._ib_conn.reqHistoricalData(
                 contract=ib_contract,
@@ -259,7 +261,7 @@ class IBDataStreamer(ADataStreamer, IBBase):
         self._ib_conn.cancelHistoricalData(bars=bars)
         del self._bars_subscriptions[contract]
 
-    def _get_bars_duration_str(self, bar_size: timedelta) -> str:
+    def _get_bars_subscription_duration_str(self, bar_size: timedelta) -> str:
         self._validate_bar_size(bar_size=bar_size)
 
         if bar_size == timedelta(seconds=1):

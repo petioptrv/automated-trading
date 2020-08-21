@@ -2,8 +2,15 @@ import time
 from datetime import datetime, timedelta
 
 import pytest
+import numpy as np
 
-from algotradepy.contracts import StockContract, PriceType
+from algotradepy.contracts import (
+    StockContract,
+    PriceType,
+    OptionContract,
+    Right,
+)
+from algotradepy.objects import Greeks
 
 AWAIT_TIME_OUT = 10
 
@@ -168,3 +175,103 @@ def test_cancel_tick_data(streamer):
         streamer.sleep()
 
     assert mid is None  # did not refresh again
+
+
+def get_valid_spy_contract(idx) -> OptionContract:
+    from ib_insync import IB, Stock
+
+    ib = IB()
+    ib.connect(clientId=idx + 1)
+    ib_stk_con = Stock(symbol="SPY", exchange="SMART", currency="USD")
+    ib_details = ib.reqContractDetails(ib_stk_con)[0]
+    ib.reqMarketDataType(4)
+    tick = ib.reqMktData(contract=ib_stk_con, snapshot=True)
+    while np.isnan(tick.ask):
+        ib.sleep()
+    ask = tick.ask
+    ib_con_id = ib_details.contract.conId
+    ib_chains = ib.reqSecDefOptParams(
+        underlyingSymbol="SPY",
+        futFopExchange="",
+        underlyingSecType="STK",
+        underlyingConId=ib_con_id,
+    )
+    ib_chain = ib_chains[0]
+    ib_chain.strikes.sort(key=lambda s: abs(s - ask))
+    strike = ib_chain.strikes[0]
+    expiration_str = ib_chain.expirations[idx]
+    expiration_date = datetime.strptime(expiration_str, "%Y%m%d")
+    spy_contract = OptionContract(
+        symbol="SPY",
+        strike=strike,
+        right=Right.CALL,
+        multiplier=int(ib_chain.multiplier),
+        last_trade_date=expiration_date,
+    )
+    ib.disconnect()
+
+    return spy_contract
+
+
+@pytest.fixture()
+def first_valid_spy_option() -> OptionContract:
+    pytest.importorskip("ib_insync")
+    con = get_valid_spy_contract(idx=0)
+    return con
+
+
+@pytest.fixture()
+def second_valid_spy_option() -> OptionContract:
+    pytest.importorskip("ib_insync")
+    con = get_valid_spy_contract(idx=1)
+    return con
+
+
+def test_subscribe_to_greeks(
+    streamer, first_valid_spy_option, second_valid_spy_option,
+):
+    first_greek_updates = []
+    second_greek_updates = []
+
+    def update_first_greeks(greeks: Greeks):
+        first_greek_updates.append(greeks)
+
+    def update_second_greeks(greeks: Greeks):
+        second_greek_updates.append(greeks)
+
+    streamer.subscribe_to_greeks(
+        contract=first_valid_spy_option, func=update_first_greeks,
+    )
+    streamer.subscribe_to_greeks(
+        contract=second_valid_spy_option, func=update_second_greeks,
+    )
+
+    while len(first_greek_updates) == 0 or len(second_greek_updates) == 0:
+        streamer.sleep()
+
+    assert isinstance(first_greek_updates[0], Greeks)
+    assert first_greek_updates[-1] != second_greek_updates[-1]
+
+
+def test_cancel_greeks(streamer, first_valid_spy_option):
+    greek_updates = []
+
+    def update_greeks(greeks: Greeks):
+        greek_updates.append(greeks)
+
+    streamer.subscribe_to_greeks(
+        contract=first_valid_spy_option, func=update_greeks,
+    )
+
+    while len(greek_updates) == 0:
+        streamer.sleep()
+
+    streamer.cancel_greeks(
+        contract=first_valid_spy_option, func=update_greeks,
+    )
+
+    streamer.sleep(1)
+    first_len = len(greek_updates)
+    streamer.sleep(5)
+
+    assert len(greek_updates) == first_len

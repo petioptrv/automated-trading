@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional, Tuple, Dict, List, Callable
 
 from algotradepy.ib_utils import IBBase
-from algotradepy.position import Position
+from algotradepy.objects import Position
 
 try:
     import ib_insync
@@ -15,6 +15,7 @@ from ibapi.account_summary_tags import (
     AccountSummaryTags as _AccountSummaryTags,
 )
 from ib_insync.order import Trade as _IBTrade
+from ib_insync import Position as _IBPosition
 
 from algotradepy.brokers.base import ABroker
 from algotradepy.connectors.ib_connector import (
@@ -115,6 +116,12 @@ class IBBroker(IBBase, ABroker):
     def subscribe_to_trade_updates(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
+        if self._ib_conn.client_id != 0:
+            raise ValueError(
+                f"Cannot subscribe to trade updates with a client id"
+                f" {self._ib_conn.client_id}."
+            )
+
         if fn_kwargs is None:
             fn_kwargs = {}
 
@@ -123,6 +130,24 @@ class IBBroker(IBBase, ABroker):
             func(status, **fn_kwargs)
 
         self._ib_conn.orderStatusEvent += order_status_filter
+
+    def subscribe_to_position_updates(
+        self, func: Callable, fn_kwargs: Optional[Dict] = None,
+    ):
+        if self._ib_conn.client_id != 0:
+            raise ValueError(
+                f"Cannot subscribe to position updates with a client id"
+                f" {self._ib_conn.client_id}."
+            )
+
+        if fn_kwargs is None:
+            fn_kwargs = {}
+
+        def position_filter(ib_position: _IBPosition):
+            position = self._from_ib_position(ib_position=ib_position)
+            func(position, **fn_kwargs)
+
+        self._ib_conn.positionEvent += position_filter
 
     def place_trade(
         self, trade: Trade, *args, await_confirm: bool = False,

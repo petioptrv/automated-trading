@@ -98,6 +98,24 @@ class ABroker(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def subscribe_to_position_updates(
+        self, func: Callable, fn_kwargs: Optional[Dict] = None,
+    ):
+        """Subscribe to receiving position updates.
+
+        Parameters
+        ----------
+        func : Callable
+            The callback function. It must accept a
+            :class:`~algotradepy.objects.Position` as its sole positional
+            argument.
+        fn_kwargs : dict
+            The keyword arguments to pass to the callback function along with
+            the positional arguments.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def place_trade(self, trade: Trade, *args, **kwargs) -> Tuple[bool, Trade]:
         """Place a trade with specified details.
 
@@ -137,6 +155,7 @@ class ABroker(ABC):
         float
             The current position for the specified symbol.
         """
+        # TODO: refactor to return list of Position objects
         raise NotImplementedError
 
     @abstractmethod

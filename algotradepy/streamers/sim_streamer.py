@@ -3,9 +3,10 @@ from typing import Callable, Optional, Dict
 
 import pandas as pd
 
-from algotradepy.contracts import AContract, PriceType
+from algotradepy.contracts import AContract, PriceType, OptionContract
 from algotradepy.historical.hist_utils import is_daily
 from algotradepy.historical.loaders import HistoricalRetriever
+from algotradepy.objects import Greeks
 from algotradepy.sim_utils import ASimulationPiece
 from algotradepy.streamers.base import ADataStreamer
 from algotradepy.time_utils import get_next_trading_date
@@ -38,6 +39,8 @@ class SimulationDataStreamer(ADataStreamer, ASimulationPiece):
         self._bars_callback_table = {}
         # {contract: {func: {"fn_kwargs": fn_kwargs, "price_type": price_type}}}
         self._tick_callback_table = {}
+        # {contract: {func: fn_kwargs}}
+        self._greeks_callback_table = {}
         self._hist_cache_only = None
 
     def subscribe_to_bars(
@@ -94,6 +97,25 @@ class SimulationDataStreamer(ADataStreamer, ASimulationPiece):
             if len(callbacks) == 0:
                 del self._tick_callback_table[contract]
 
+    def subscribe_to_greeks(
+        self,
+        contract: OptionContract,
+        func: Callable,
+        fn_kwargs: Optional[Dict] = None,
+    ):
+        if fn_kwargs is None:
+            fn_kwargs = {}
+
+        con_dict = self._greeks_callback_table.setdefault(contract, {})
+        con_dict[func] = fn_kwargs
+
+    def cancel_greeks(self, contract: AContract, func: Callable):
+        con_dict = self._greeks_callback_table[contract]
+        del con_dict[func]
+
+        if len(con_dict) == 0:
+            del self._greeks_callback_table[contract]
+
     def subscribe_to_trades(
         self,
         contract: AContract,
@@ -114,6 +136,13 @@ class SimulationDataStreamer(ADataStreamer, ASimulationPiece):
     def get_bar(self, contract: AContract, bar_size: timedelta,) -> pd.Series:
         bar = self._get_next_bar(contract=contract, bar_size=bar_size)
         return bar
+
+    def simulate_greeks_update(self, contract: OptionContract, greeks: Greeks):
+        # TODO: make this functionality dependent on the simulation data
+        con_dict = self._greeks_callback_table[contract]
+
+        for func, fn_kwargs in con_dict.items():
+            func(greeks, **fn_kwargs)
 
     # -------------------------- Helpers ---------------------------------------
 

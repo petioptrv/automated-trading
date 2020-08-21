@@ -4,8 +4,15 @@ import numpy as np
 import pytest
 
 from algotradepy.brokers import SimulationBroker
-from algotradepy.contracts import StockContract, Currency, PriceType
+from algotradepy.contracts import (
+    StockContract,
+    Currency,
+    PriceType,
+    OptionContract,
+    Right,
+)
 from algotradepy.historical.loaders import HistoricalRetriever
+from algotradepy.objects import Greeks
 from algotradepy.sim_utils import SimulationClock, SimulationRunner
 from algotradepy.streamers.sim_streamer import SimulationDataStreamer
 from tests.conftest import TEST_DATA_DIR
@@ -271,3 +278,118 @@ def test_tick_data_delivery_order(sim_broker_runner_and_streamer_1s):
 
     assert len(spy_ask) == 17
     assert len(schw_ask) == 18
+
+
+def test_subscribe_to_greeks():
+    sim_streamer = SimulationDataStreamer()
+    greeks_updates = []
+
+    def update_greeks(greeks_: Greeks):
+        greeks_updates.append(greeks_)
+
+    con = OptionContract(
+        symbol="SPY",
+        strike=345.6,
+        right=Right.CALL,
+        multiplier=100,
+        last_trade_date=date(2020, 1, 1),
+    )
+    sim_streamer.subscribe_to_greeks(contract=con, func=update_greeks)
+
+    new_greeks = Greeks(delta=10, gamma=11, vega=12, theta=13)
+    sim_streamer.simulate_greeks_update(contract=con, greeks=new_greeks)
+
+    assert len(greeks_updates) == 1
+
+    update: Greeks = greeks_updates[0]
+
+    assert update.delta == 10
+    assert update.gamma == 11
+    assert update.vega == 12
+    assert update.theta == 13
+
+    new_greeks = Greeks(delta=100, gamma=110, vega=120, theta=130)
+    sim_streamer.simulate_greeks_update(contract=con, greeks=new_greeks)
+
+    assert len(greeks_updates) == 2
+
+    update: Greeks = greeks_updates[1]
+
+    assert update.delta == 100
+
+
+def test_cancel_greeks():
+    sim_streamer = SimulationDataStreamer()
+    greeks_updates = []
+
+    def update_greeks(greeks_: Greeks):
+        greeks_updates.append(greeks_)
+
+    con = OptionContract(
+        symbol="SPY",
+        strike=345.6,
+        right=Right.CALL,
+        multiplier=100,
+        last_trade_date=date(2020, 1, 1),
+    )
+    sim_streamer.subscribe_to_greeks(contract=con, func=update_greeks)
+
+    new_greeks = Greeks(delta=10, gamma=11, vega=12, theta=13)
+    sim_streamer.simulate_greeks_update(contract=con, greeks=new_greeks)
+
+    assert len(greeks_updates) == 1
+
+    sim_streamer.cancel_greeks(contract=con, func=update_greeks)
+    new_greeks = Greeks(delta=100, gamma=110, vega=120, theta=130)
+
+    with pytest.raises(KeyError):
+        sim_streamer.simulate_greeks_update(contract=con, greeks=new_greeks)
+
+
+def test_multiple_greeks_subscriptions():
+    sim_streamer = SimulationDataStreamer()
+    first_greeks_updates = []
+    second_greeks_updates = []
+
+    def update_first_greeks(greeks_: Greeks):
+        first_greeks_updates.append(greeks_)
+
+    def update_second_greeks(greeks_: Greeks):
+        second_greeks_updates.append(greeks_)
+
+    first_con = OptionContract(
+        symbol="SPY",
+        strike=345.6,
+        right=Right.CALL,
+        multiplier=100,
+        last_trade_date=date(2020, 1, 1),
+    )
+    second_con = OptionContract(
+        symbol="AAPL",
+        strike=1234.5,
+        right=Right.PUT,
+        multiplier=100,
+        last_trade_date=date(2020, 1, 2),
+    )
+    sim_streamer.subscribe_to_greeks(
+        contract=first_con, func=update_first_greeks,
+    )
+    sim_streamer.subscribe_to_greeks(
+        contract=second_con, func=update_second_greeks,
+    )
+
+    first_new_greeks = Greeks(delta=100, gamma=110, vega=120, theta=130)
+    sim_streamer.simulate_greeks_update(
+        contract=first_con, greeks=first_new_greeks,
+    )
+
+    assert len(first_greeks_updates) == 1
+    assert len(second_greeks_updates) == 0
+
+    second_new_greeks = Greeks(delta=10, gamma=11, vega=12, theta=13)
+    sim_streamer.simulate_greeks_update(
+        contract=second_con, greeks=second_new_greeks,
+    )
+
+    assert len(first_greeks_updates) == 1
+    assert len(second_greeks_updates) == 1

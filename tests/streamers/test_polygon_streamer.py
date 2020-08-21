@@ -4,7 +4,7 @@ import time
 import pytest
 
 from algotradepy.contracts import StockContract
-from algotradepy.tick import Tick
+from algotradepy.objects import Tick
 from tests.conftest import can_test_polygon
 
 

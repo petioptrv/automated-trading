@@ -3,7 +3,6 @@ from collections import OrderedDict
 
 import numpy as np
 import pytest
-from ib_insync import OrderStatus
 
 from algotradepy.contracts import (
     AContract,
@@ -321,6 +320,8 @@ def test_subscribe_to_tws_position_updates(
     ib_mkt_buy_order_1,
     ib_mkt_sell_order_1,
 ):
+    from ib_insync import OrderStatus
+
     first_updates = []
     second_updates = []
 

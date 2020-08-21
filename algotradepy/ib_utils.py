@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional, Type
 import logging
 
-from algotradepy.position import Position
+from algotradepy.objects import Position, Greeks
 
 try:
     import ib_insync
@@ -30,6 +30,7 @@ from ib_insync.order import (
     ExecutionCondition as _IBExecutionCondition,
 )
 from ib_insync import Position as _IBPosition
+from ib_insync.objects import OptionComputation as _IBOptionComputation
 
 from algotradepy.connectors.ib_connector import (
     IBConnector,
@@ -109,6 +110,16 @@ class IBBase:
         self._ib_conn.sleep(secs)
 
     # ------------------------------ Converters --------------------------------
+
+    @staticmethod
+    def _from_ib_greeks(ib_greeks: _IBOptionComputation) -> Greeks:
+        greeks = Greeks(
+            delta=ib_greeks.delta,
+            gamma=ib_greeks.gamma,
+            vega=ib_greeks.vega,
+            theta=ib_greeks.theta,
+        )
+        return greeks
 
     def _from_ib_trade(self, ib_trade: _IBTrade) -> Trade:
         contract = self._from_ib_contract(ib_contract=ib_trade.contract)
@@ -493,6 +504,7 @@ class IBBase:
     def _from_ib_position(self, ib_position: _IBPosition) -> Position:
         contract = self._from_ib_contract(ib_contract=ib_position.contract)
         pos = Position(
+            account=ib_position.account,
             contract=contract,
             position=ib_position.position,
             ave_fill_price=ib_position.avgCost,

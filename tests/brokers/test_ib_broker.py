@@ -3,6 +3,7 @@ from collections import OrderedDict
 
 import numpy as np
 import pytest
+from ib_insync import OrderStatus
 
 from algotradepy.contracts import (
     AContract,
@@ -268,8 +269,8 @@ def test_subscribe_to_trade_updates_non_master_raises(non_master_broker):
     def dummy_fn(*_, **__):
         pass
 
-    with pytest.raises(AttributeError):
-        master_broker.subscribe_to_trade_updates(func=dummy_fn)
+    with pytest.raises(ValueError):
+        non_master_broker.subscribe_to_trade_updates(func=dummy_fn)
 
 
 def test_subscribe_to_tws_trade_updates(
@@ -301,6 +302,62 @@ def test_subscribe_to_tws_trade_updates(
     status: TradeStatus = item[1]
 
     assert status.filled + status.remaining == 1
+
+
+def test_subscribe_to_position_updates_non_master_fails(
+    non_master_ib_test_broker,
+):
+    def dummy_fn(*_, **__):
+        pass
+
+    with pytest.raises(ValueError):
+        non_master_broker.subscribe_to_position_updates(func=dummy_fn)
+
+
+def test_subscribe_to_tws_position_updates(
+    master_broker,
+    non_master_ib_test_broker,
+    ib_stk_contract_spy,
+    ib_mkt_buy_order_1,
+    ib_mkt_sell_order_1,
+):
+    first_updates = []
+    second_updates = []
+
+    master_broker.subscribe_to_position_updates(
+        func=lambda t: first_updates.append(t),
+    )
+
+    trade = non_master_ib_test_broker.placeOrder(
+        contract=ib_stk_contract_spy, order=ib_mkt_buy_order_1,
+    )
+    while trade.orderStatus.status not in OrderStatus.DoneStates:
+        non_master_ib_test_broker.sleep(1)
+
+    assert len(first_updates) != 0
+    assert len(second_updates) == 0
+
+    update = first_updates[-1]
+    update_con = update.contract
+
+    assert update_con.symbol == ib_stk_contract_spy.symbol
+
+    master_broker.subscribe_to_position_updates(
+        func=lambda t: second_updates.append(t),
+    )
+
+    trade = non_master_ib_test_broker.placeOrder(
+        contract=ib_stk_contract_spy, order=ib_mkt_sell_order_1,
+    )
+    while trade.orderStatus.status not in OrderStatus.DoneStates:
+        non_master_ib_test_broker.sleep(1)
+
+    assert len(second_updates) != 0
+
+    f_update = first_updates[-1]
+    s_update = second_updates[-1]
+
+    assert f_update == s_update
 
 
 def request_manual_input(msg):

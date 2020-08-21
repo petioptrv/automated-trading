@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 import time as real_time
 from typing import Callable, Optional, Dict, Tuple, List
 
 from algotradepy.brokers.base import ABroker
-from algotradepy.contracts import AContract, Currency, Exchange
+from algotradepy.contracts import AContract, Currency
+from algotradepy.objects import Position
 from algotradepy.orders import (
     LimitOrder,
     OrderAction,
@@ -13,6 +14,8 @@ from algotradepy.sim_utils import ASimulationPiece
 from algotradepy.streamers.sim_streamer import SimulationDataStreamer
 from algotradepy.trade import TradeState, TradeStatus, Trade
 from algotradepy.utils import recursive_dict_update
+
+DEFAULT_SIM_ACC = "DEFAULT"
 
 
 class SimulationBroker(ABroker, ASimulationPiece):
@@ -32,9 +35,9 @@ class SimulationBroker(ABroker, ASimulationPiece):
     transaction_cost : float
         The cost of each transaction.
     starting_positions : dict, optional, default None
-        A dictionary of the starting positions, mapping each symbol to
-        a dictionary of :class:`~algotradepy.contracts.Exchange` to float,
-        representing the position of that symbol for each specified exchange.
+        A dictionary of the starting positions, mapping each account to
+        a dictionary of :class:`~algotradepy.contracts.AContract` to
+        :class:`~algotradepy.objects.Position`.
 
     """
 
@@ -43,15 +46,17 @@ class SimulationBroker(ABroker, ASimulationPiece):
         sim_streamer: SimulationDataStreamer,
         starting_funds: Dict[Currency, float],
         transaction_cost: float,
-        starting_positions: Optional[Dict[str, Dict[Exchange, float]]] = None,
+        starting_positions: Optional[
+            Dict[str, Dict[AContract, Position]]
+        ] = None,
     ):
         ABroker.__init__(self, simulation=True)
         ASimulationPiece.__init__(self)
 
         self._streamer = sim_streamer
         self._cash = starting_funds
-        # {symbol: {exchange: n_shares}}
-        self._positions: Dict[str, Dict[Exchange, float]] = {}
+        # {account: {contract: Position}}
+        self._positions: Dict[str, Dict[AContract, Position]] = {}
         if starting_positions is not None:
             self._positions = recursive_dict_update(
                 receiver=self._positions, updater=starting_positions,
@@ -60,6 +65,7 @@ class SimulationBroker(ABroker, ASimulationPiece):
         self._valid_id = 1
         self._new_trade_subscribers = []
         self._trade_updates_subscribers = []
+        self._position_updates_subscribers = []
         self._placed_trades: List[Trade] = []
         # [(trade, price, n_shares)]
         self._scheduled_trade_executions = []
@@ -104,6 +110,14 @@ class SimulationBroker(ABroker, ASimulationPiece):
         if fn_kwargs is None:
             fn_kwargs = {}
         self._trade_updates_subscribers.append((func, fn_kwargs))
+
+    def subscribe_to_position_updates(
+        self, func: Callable, fn_kwargs: Optional[Dict] = None,
+    ):
+        # TODO: test
+        if fn_kwargs is None:
+            fn_kwargs = {}
+        self._position_updates_subscribers.append((func, fn_kwargs))
 
     def place_trade(self, trade: Trade, *args, **kwargs) -> Tuple[bool, Trade]:
         trade_id = self._get_increment_valid_id()
@@ -153,12 +167,21 @@ class SimulationBroker(ABroker, ASimulationPiece):
 
         self._update_trade_updates_subscribers(trade=trade)
 
-    def get_position(self, contract: AContract, *args, **kwargs) -> float:
-        symbol = contract.symbol
-        exchange = contract.exchange
-        symbol_positions = self._positions.setdefault(symbol, {})
-        exchange_position = symbol_positions.setdefault(exchange, 0)
-        return exchange_position
+    def get_position(
+        self,
+        contract: AContract,
+        *args,
+        account: Optional[str] = None,
+        **kwargs,
+    ) -> float:
+        if account is not None:
+            position = self._get_position_for_account(
+                account=account, contract=contract,
+            )
+        else:
+            position = self._get_cumulative_position(contract=contract)
+
+        return position
 
     def get_transaction_fee(self) -> float:
         return self._abs_fee
@@ -220,7 +243,9 @@ class SimulationBroker(ABroker, ASimulationPiece):
             funds_delta = n_shares * price + self.get_transaction_fee()
             shares_delta = -n_shares
         self.acc_cash[contract.currency] += funds_delta
-        self._add_to_position(contract=contract, n_shares=shares_delta)
+        self._add_to_position(
+            contract=contract, n_shares=shares_delta, fill_price=price,
+        )
 
         filled = trade.status.filled
         new_filled = filled + n_shares
@@ -268,12 +293,49 @@ class SimulationBroker(ABroker, ASimulationPiece):
                     f" the simulation price of {price}."
                 )
 
-    def _add_to_position(self, contract: AContract, n_shares: float):
-        symbol = contract.symbol
-        exchange = contract.exchange
-        symbol_positions = self._positions.setdefault(symbol, {})
-        symbol_positions.setdefault(exchange, 0)
-        symbol_positions[exchange] += n_shares
+    def _add_to_position(
+        self,
+        contract: AContract,
+        n_shares: float,
+        fill_price: float,
+        account: str = DEFAULT_SIM_ACC,
+    ):
+        acc_positions = self._positions.setdefault(account, {})
+
+        if contract not in acc_positions:
+            new_position_size = n_shares
+            new_ave_fill_price = fill_price
+        else:
+            curr_pos = acc_positions[contract]
+            new_position_size = curr_pos.position + n_shares
+            prev_price = curr_pos.position * curr_pos.ave_fill_price
+            curr_price = n_shares * fill_price
+            new_ave_fill_price = (prev_price + curr_price) / new_position_size
+
+        new_position = Position(
+            account=account,
+            contract=contract,
+            position=new_position_size,
+            ave_fill_price=new_ave_fill_price,
+        )
+        acc_positions[contract] = new_position
+        self._update_position_updates_subscribers(position=new_position)
+
+    def _get_position_for_account(
+        self, account: str, contract: AContract,
+    ) -> float:
+        position = self._positions[account][contract].position
+        return position
+
+    def _get_cumulative_position(self, contract: AContract) -> float:
+        position = 0
+
+        for acc_dict in self._positions.values():
+            con_pos = acc_dict.get(contract)
+            if con_pos is not None:
+                position += con_pos.position
+
+        return position
 
     def _update_trade_updates_subscribers(self, trade: Trade):
         trade_idx = self._placed_trades.index(trade)
@@ -282,6 +344,10 @@ class SimulationBroker(ABroker, ASimulationPiece):
 
         for func, fn_kwargs in self._trade_updates_subscribers:
             func(status, **fn_kwargs)
+
+    def _update_position_updates_subscribers(self, position: Position):
+        for func, fn_kwargs in self._position_updates_subscribers:
+            func(position, **fn_kwargs)
 
     def _get_current_price(self, contract: AContract) -> float:
         # TODO: use 1s aggregation of ticks, if available

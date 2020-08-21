@@ -10,11 +10,11 @@ class ReprAble:
         ]
         first_arg = public_args[0]
         repr_str = (
-            f"{class_name}<{first_arg} {self.__getattribute__(first_arg)}"
+            f"{class_name}({first_arg} {self.__getattribute__(first_arg)}"
         )
         for arg in public_args[1:]:
-            repr_str += f":{arg} {self.__getattribute__(arg)}"
-        repr_str += ">"
+            repr_str += f", {arg} {self.__getattribute__(arg)}"
+        repr_str += ")"
 
         return repr_str
 

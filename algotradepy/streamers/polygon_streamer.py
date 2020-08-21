@@ -6,7 +6,7 @@ from algotradepy.connectors.polygon_connector import PolygonWebSocketConnector
 from algotradepy.contracts import AContract, PriceType, StockContract
 from algotradepy.streamers.base import ADataStreamer
 from algotradepy.time_utils import milli_to_seconds
-from algotradepy.tick import Tick
+from algotradepy.objects import Tick
 
 
 class PolygonDataStreamer(ADataStreamer):

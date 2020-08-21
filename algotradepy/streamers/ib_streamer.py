@@ -17,7 +17,7 @@ except ImportError:
     )
 from ib_insync.ticker import Ticker as _IBTicker
 
-from algotradepy.contracts import AContract, PriceType
+from algotradepy.contracts import AContract, PriceType, OptionContract
 from algotradepy.connectors.ib_connector import IBConnector
 from algotradepy.streamers.base import ADataStreamer
 
@@ -46,11 +46,17 @@ class IBDataStreamer(ADataStreamer, IBBase):
     ):
         IBBase.__init__(self, simulation=simulation, ib_connector=ib_connector)
 
+        # {contract: {"tick": ib_tick, "sub_count": sub-count}}
+        self._tick_subscriptions = {}
+        # {contract: {func: greeks_filter}}
+        self._greeks_subscription = {}
         # {contract: {func: {"price_type": price_type, "kwargs": kwargs}}}
         self._price_subscriptions = {}
         # {contract: {"bars": BarDataList, "funcs": {func: kwargs}}}
         self._bars_subscriptions = {}
         self._market_data_type_set = False
+
+        self._set_market_data_type()
 
     def subscribe_to_bars(
         self,
@@ -63,8 +69,6 @@ class IBDataStreamer(ADataStreamer, IBBase):
         # TODO: test all the different bar sizes
         if fn_kwargs is None:
             fn_kwargs = {}
-
-        self._set_market_data_type()
 
         def bars_update(
             bars_: BarDataList, has_new_bar: bool, contract_: AContract,
@@ -136,10 +140,9 @@ class IBDataStreamer(ADataStreamer, IBBase):
         fn_kwargs: Optional[Dict] = None,
         price_type: PriceType = PriceType.MARKET,
     ):
+        # TODO: refactor to use new tick subscription approach
         if fn_kwargs is None:
             fn_kwargs = {}
-
-        self._set_market_data_type()
 
         def price_update(ticker: _IBTicker):
             contract_ = self._from_ib_contract(ib_contract=ticker.contract)
@@ -197,6 +200,36 @@ class IBDataStreamer(ADataStreamer, IBBase):
                 f" function {func}."
             )
 
+    def subscribe_to_greeks(
+        self,
+        contract: OptionContract,
+        func: Callable,
+        fn_kwargs: Optional[Dict] = None,
+    ):
+        if not isinstance(contract, OptionContract):
+            raise TypeError(
+                f"Cannot retrieve greeks for contract type {type(contract)}."
+            )
+
+        if fn_kwargs is None:
+            fn_kwargs = {}
+
+        def greeks_filter(tick_: _IBTicker):
+            ib_greeks = tick_.modelGreeks
+            greeks = self._from_ib_greeks(ib_greeks=ib_greeks)
+            func(greeks, **fn_kwargs)
+
+        greeks_dict = self._greeks_subscription.setdefault(contract, {})
+        greeks_dict[func] = greeks_filter
+        tick = self._add_tick_subscriber(contract=contract)
+        tick.updateEvent += greeks_filter
+
+    def cancel_greeks(self, contract: AContract, func: Callable):
+        greeks_dict = self._greeks_subscription[contract]
+        greeks_filter = greeks_dict[func]
+        tick = self._remove_tick_subscriber(contract=contract)
+        tick.updateEvent -= greeks_filter
+
     def subscribe_to_trades(
         self,
         contract: AContract,
@@ -236,7 +269,7 @@ class IBDataStreamer(ADataStreamer, IBBase):
         elif bar_size <= timedelta(minutes=1):
             duration_str = "60 S"
         elif timedelta(minutes=1) < bar_size < timedelta(hours=1):
-            duration_str = "1 H"
+            duration_str = "3600 S"
         elif timedelta(hours=1) <= bar_size < timedelta(days=1):
             duration_str = "1 D"
         elif timedelta(days=1):
@@ -247,3 +280,40 @@ class IBDataStreamer(ADataStreamer, IBBase):
             )
 
         return duration_str
+
+    def _add_tick_subscriber(self, contract: AContract) -> _IBTicker:
+        if contract not in self._tick_subscriptions:
+            self._subscribe_to_tick(contract=contract)
+
+        tick_dict = self._tick_subscriptions[contract]
+        tick_dict["sub_count"] += 1
+        tick = tick_dict["tick"]
+
+        return tick
+
+    def _subscribe_to_tick(self, contract: AContract):
+        ib_contract = self._to_ib_contract(contract=contract)
+        tick = self._ib_conn.reqMktData(
+            contract=ib_contract,
+            genericTickList="",
+            snapshot=False,
+            regulatorySnapshot=False,
+            mktDataOptions=[],
+        )
+
+        self._tick_subscriptions[contract] = {"tick": tick, "sub_count": 0}
+
+    def _remove_tick_subscriber(self, contract: AContract) -> _IBTicker:
+        tick_dict = self._tick_subscriptions[contract]
+        tick_dict["sub_count"] -= 1
+        tick = tick_dict["tick"]
+
+        if tick_dict["sub_count"] == 0:
+            self._unsubscribe_from_tick(contract=contract)
+
+        return tick
+
+    def _unsubscribe_from_tick(self, contract: AContract):
+        ib_contract = self._to_ib_contract(contract=contract)
+        self._ib_conn.cancelMktData(contract=ib_contract)
+        del self._tick_subscriptions[contract]

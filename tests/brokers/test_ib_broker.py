@@ -11,6 +11,7 @@ from algotradepy.contracts import (
     Currency,
     ForexContract,
 )
+from algotradepy.objects import Position
 from algotradepy.orders import (
     AnOrder,
     LimitOrder,
@@ -184,6 +185,45 @@ def spy_stock_contract():
     contract = StockContract(symbol="SPY")
 
     return contract
+
+
+def test_open_positions(
+    master_broker,
+    non_master_ib_test_broker,
+    spy_stock_contract,
+    ib_stk_contract_spy,
+    ib_mkt_buy_order_1,
+    ib_mkt_sell_order_1,
+):
+    from ib_insync import OrderStatus
+
+    initial_positions = master_broker.open_positions
+
+    if len(initial_positions) != 0:
+        raise ValueError("Must run tests on a blank paper-trading account.")
+
+    trade = non_master_ib_test_broker.placeOrder(
+        contract=ib_stk_contract_spy, order=ib_mkt_buy_order_1,
+    )
+
+    while trade.orderStatus.status not in OrderStatus.DoneStates:
+        non_master_ib_test_broker.sleep()
+
+    positions = master_broker.open_positions
+
+    assert len(positions) == 1
+
+    position = positions[0]
+
+    assert position.contract == spy_stock_contract
+    assert position.position == 1
+
+    trade = non_master_ib_test_broker.placeOrder(
+        contract=ib_stk_contract_spy, order=ib_mkt_sell_order_1,
+    )
+
+    while trade.orderStatus.status not in OrderStatus.DoneStates:
+        non_master_ib_test_broker.sleep()
 
 
 def test_subscribe_to_new_trades_non_master_raises(non_master_broker):

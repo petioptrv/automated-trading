@@ -218,8 +218,13 @@ class IBDataStreamer(ADataStreamer, IBBase):
 
         def greeks_filter(tick_: _IBTicker):
             ib_greeks = tick_.modelGreeks
-            greeks = self._from_ib_greeks(ib_greeks=ib_greeks)
-            func(greeks, **fn_kwargs)
+            if ib_greeks is not None:
+                greeks = self._from_ib_greeks(ib_greeks=ib_greeks)
+                func(greeks, **fn_kwargs)
+            else:
+                logging.warning(
+                    f"No greeks received on tick update for {tick_.contract}."
+                )
 
         greeks_dict = self._greeks_subscription.setdefault(contract, {})
         greeks_dict[func] = greeks_filter

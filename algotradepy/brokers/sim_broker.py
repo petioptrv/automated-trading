@@ -45,7 +45,7 @@ class SimulationBroker(ABroker, ASimulationPiece):
         self,
         sim_streamer: SimulationDataStreamer,
         starting_funds: Dict[Currency, float],
-        transaction_cost: float,
+        transaction_cost: float = 0,
         starting_positions: Optional[
             Dict[str, Dict[AContract, Position]]
         ] = None,
@@ -84,13 +84,22 @@ class SimulationBroker(ABroker, ASimulationPiece):
 
     @property
     def open_trades(self) -> List[Trade]:
+        # TODO: test
         done_statuses = [TradeState.CANCELLED, TradeState.FILLED]
         open_trades = []
+
         for trade in self._placed_trades:
             if trade.status.state not in done_statuses:
                 open_trades.append(trade)
 
         return open_trades
+
+    @property
+    def open_positions(self) -> List[Position]:
+        positions = [
+            position for contract, position in self._positions.items()
+        ]
+        return positions
 
     def sleep(self, secs: float):
         real_time.sleep(secs=secs)
@@ -119,7 +128,14 @@ class SimulationBroker(ABroker, ASimulationPiece):
             fn_kwargs = {}
         self._position_updates_subscribers.append((func, fn_kwargs))
 
-    def place_trade(self, trade: Trade, *args, **kwargs) -> Tuple[bool, Trade]:
+    def place_trade(
+        self,
+        trade: Trade,
+        *args,
+        trade_execution_price: Optional[float] = None,
+        trade_execution_size: Optional[float] = None,
+        **kwargs,
+    ) -> Tuple[bool, Trade]:
         trade_id = self._get_increment_valid_id()
         order = trade.order
         order._order_id = trade_id
@@ -138,9 +154,9 @@ class SimulationBroker(ABroker, ASimulationPiece):
         self._update_trade_updates_subscribers(trade=new_trade)
 
         if isinstance(trade.order, MarketOrder):
-            # TODO: This should be smarter... What if liquidity is low?
-            # maybe should remove it and only use self.simulate_trade_execution
-            self._execute_trade(trade=trade)
+            self._scheduled_trade_executions.append(
+                (trade, trade_execution_price, trade_execution_size)
+            )
 
         # update trade placed subscribers
         for func, fn_kwargs in self._new_trade_subscribers:
@@ -149,7 +165,7 @@ class SimulationBroker(ABroker, ASimulationPiece):
         return True, new_trade
 
     def cancel_trade(self, trade: Trade):
-        # TODO: implement
+        # TODO: test
         cancelled_status = TradeStatus(
             state=TradeState.CANCELLED,
             filled=trade.status.filled,

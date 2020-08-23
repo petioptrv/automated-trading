@@ -23,20 +23,47 @@ def test_simulation_broker_init():
     assert broker.get_transaction_fee() == 1
 
 
-def test_simulation_broker_buy(sim_broker_runner_and_streamer_15m):
+def get_1_spy_mkt_trade(buy: bool) -> Trade:
+    contract = StockContract(symbol="SPY")
+
+    if buy:
+        action = OrderAction.BUY
+    else:
+        action = OrderAction.SELL
+
+    order = MarketOrder(action=action, quantity=1)
+    trade = Trade(contract=contract, order=order)
+
+    return trade
+
+
+@pytest.fixture()
+def buy_1_spy_mkt_trade() -> Trade:
+    trade = get_1_spy_mkt_trade(buy=True)
+    return trade
+
+
+@pytest.fixture()
+def sell_1_spy_mkt_trade() -> Trade:
+    trade = get_1_spy_mkt_trade(buy=False)
+    return trade
+
+
+def test_simulation_broker_buy(
+    sim_broker_runner_and_streamer_15m, buy_1_spy_mkt_trade,
+):
     broker, runner, _ = sim_broker_runner_and_streamer_15m
     spy_stock_contract = StockContract(symbol="SPY")
 
     assert broker.get_position(contract=spy_stock_contract) == 0
 
-    contract = StockContract(symbol="SPY")
-    order = MarketOrder(action=OrderAction.BUY, quantity=1)
-    trade = Trade(contract=contract, order=order)
+    runner.run_sim(step_count=1, cache_only=True)
+
+    broker.place_trade(trade=buy_1_spy_mkt_trade)
 
     runner.run_sim(step_count=1, cache_only=True)
-    broker.place_trade(trade=trade, order=order)
 
-    spy_2020_4_6_9_45_open = 257.78
+    spy_2020_4_6_9_45_open = 259.79
 
     assert np.isclose(
         broker.acc_cash[Currency.USD], 1000 - spy_2020_4_6_9_45_open - 1,
@@ -44,26 +71,43 @@ def test_simulation_broker_buy(sim_broker_runner_and_streamer_15m):
     assert broker.get_position(contract=spy_stock_contract) == 1
 
 
-def test_simulation_broker_sell(sim_broker_runner_and_streamer_15m):
+def test_simulation_broker_sell(
+    sim_broker_runner_and_streamer_15m, sell_1_spy_mkt_trade,
+):
     broker, runner, _ = sim_broker_runner_and_streamer_15m
     spy_stock_contract = StockContract(symbol="SPY")
 
     assert broker.get_position(contract=spy_stock_contract) == 0
 
-    contract = StockContract(symbol="SPY")
-    order = MarketOrder(action=OrderAction.SELL, quantity=1)
-    trade = Trade(contract=contract, order=order)
+    runner.run_sim(step_count=1)
+
+    broker.place_trade(trade=sell_1_spy_mkt_trade)
 
     runner.run_sim(step_count=1)
-    broker.place_trade(trade=trade, order=order)
 
-    spy_2020_4_6_9_30_close = 257.77
+    spy_2020_4_6_9_30_close = 259.79
 
     assert np.isclose(
         broker.acc_cash[Currency.USD],
         1000 + spy_2020_4_6_9_30_close - 1,
         0.01,
     )
+
+
+def test_open_trades(
+    sim_broker_runner_and_streamer_15m, buy_1_spy_mkt_trade,
+):
+    broker, _, _ = sim_broker_runner_and_streamer_15m
+
+    assert len(broker.open_trades) == 0
+
+    broker.place_trade(trade=buy_1_spy_mkt_trade)
+
+    assert len(broker.open_trades) == 1
+
+    trade = broker.open_trades[0]
+
+    assert trade == buy_1_spy_mkt_trade
 
 
 def test_simulation_broker_limit_order(sim_broker_runner_and_streamer_15m):

@@ -22,20 +22,20 @@ def sim_broker_runner_and_streamer_15m():
         end_date=date(2020, 4, 7),
         simulation_time_step=timedelta(minutes=15),
     )
-    streamer = SimulationDataStreamer(
+    sim_streamer = SimulationDataStreamer(
         historical_retriever=HistoricalRetriever(hist_data_dir=TEST_DATA_DIR),
     )
-    broker = SimulationBroker(
-        sim_streamer=streamer,
+    sim_runner = SimulationBroker(
+        sim_streamer=sim_streamer,
         starting_funds={Currency.USD: 1_000},
         transaction_cost=1,
     )
     sim_runner = SimulationRunner(
         sim_clock=sim_clock,
-        data_providers=[streamer],
-        data_consumers=[broker],
+        data_providers=[sim_streamer],
+        data_consumers=[sim_runner],
     )
-    return broker, sim_runner, streamer
+    return sim_runner, sim_runner, sim_streamer
 
 
 def can_test_ib() -> bool:

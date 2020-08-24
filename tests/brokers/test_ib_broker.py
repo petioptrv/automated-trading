@@ -320,7 +320,7 @@ def test_subscribe_to_tws_trade_updates(
 ):
     open_orders = OrderedDict()
 
-    def log_order_status(status_: TradeStatus):
+    def log_order_status(trade_: Trade, status_: TradeStatus):
         order_id = status_.order_id
         if order_id not in open_orders:
             open_orders[order_id] = status_

@@ -89,8 +89,9 @@ class ABroker(ABC):
         ----------
         func : Callable
             The callback function. It must accept a
+            :class:`~algotradepy.trade.Trade` and a
             :class:`~algotradepy.trade.TradeStatus` as its sole positional
-            argument.
+            arguments.
         fn_kwargs : dict
             The keyword arguments to pass to the callback function along with
             the positional arguments.

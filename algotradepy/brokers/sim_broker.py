@@ -359,7 +359,7 @@ class SimulationBroker(ABroker, ASimulationPiece):
         status = trade.status
 
         for func, fn_kwargs in self._trade_updates_subscribers:
-            func(status, **fn_kwargs)
+            func(trade, status, **fn_kwargs)
 
     def _update_position_updates_subscribers(self, position: Position):
         for func, fn_kwargs in self._position_updates_subscribers:

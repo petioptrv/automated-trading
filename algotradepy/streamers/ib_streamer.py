@@ -1,5 +1,5 @@
 import logging
-from datetime import timedelta, datetime
+from datetime import timedelta
 from functools import partial
 from typing import Optional, Dict, Callable
 
@@ -77,7 +77,7 @@ class IBDataStreamer(ADataStreamer, IBBase):
             if not has_new_bar:
                 return
 
-            bars_df = df(bars_[-1:])
+            bars_df = df(bars_[-2:-1])
             bars_df = bars_df.set_index("date")
             bar_s = bars_df.iloc[0]
 

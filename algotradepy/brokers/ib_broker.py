@@ -127,8 +127,9 @@ class IBBroker(IBBase, ABroker):
             fn_kwargs = {}
 
         def order_status_filter(ib_trade: _IBTrade):
+            trade = self._from_ib_trade(ib_trade=ib_trade)
             status = self._from_ib_status(ib_order_status=ib_trade.orderStatus)
-            func(status, **fn_kwargs)
+            func(trade, status, **fn_kwargs)
 
         self._ib_conn.orderStatusEvent += order_status_filter
 

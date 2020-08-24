@@ -281,13 +281,16 @@ class IBBase:
     def _to_ib_order(self, order: AnOrder) -> _IBOrder:
         if isinstance(order, MarketOrder):
             ib_order = _IBMarketOrder(
-                action=order.action.value, totalQuantity=order.quantity,
+                action=order.action.value,
+                totalQuantity=order.quantity,
+                outsideRth=order.outside_rth,
             )
         elif isinstance(order, LimitOrder):
             ib_order = _IBLimitOrder(
                 action=order.action.value,
                 totalQuantity=order.quantity,
                 lmtPrice=round(order.limit_price, 2),
+                outsideRth=order.outside_rth,
             )
         elif isinstance(order, TrailingStopOrder):
             ib_trail_percent = order.trail_percent or UNSET_DOUBLE
@@ -300,6 +303,7 @@ class IBBase:
                 trailingPercent=ib_trail_percent,
                 trailStopPrice=ib_stop_price,
                 auxPrice=ib_aux_price,
+                outsideRth=order.outside_rth,
             )
         else:
             raise TypeError(f"Unknown type of order {type(order)}.")

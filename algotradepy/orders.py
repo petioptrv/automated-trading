@@ -59,6 +59,7 @@ class AnOrder(ABC, ReprAble):
         time_in_force: Optional[TimeInForce] = None,
         conditions: Optional[List[ACondition]] = None,
         parent_id: Optional[int] = None,
+        outside_rth: bool = False,
     ):
         super().__init__()
         self._order_id = order_id
@@ -69,6 +70,7 @@ class AnOrder(ABC, ReprAble):
             conditions = []
         self._conditions = conditions
         self._parent_id = parent_id
+        self._outside_rth = outside_rth
 
     @property
     def order_id(self) -> int:
@@ -93,6 +95,10 @@ class AnOrder(ABC, ReprAble):
     @property
     def parent_id(self):
         return self._parent_id
+
+    @property
+    def outside_rth(self):
+        return self._outside_rth
 
 
 class MarketOrder(AnOrder):

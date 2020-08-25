@@ -15,7 +15,12 @@ class RSI:
 
     @property
     def value(self) -> np.float64:
-        value = 100 - (100 / (1 + self._gain_sma.value / self._loss_sma.value))
+        if self._loss_sma.value == 0:
+            value = 100
+        else:
+            value = 100 - (
+                100 / (1 + self._gain_sma.value / self._loss_sma.value)
+            )
         return np.float64(value)
 
     def update(self, value: float):

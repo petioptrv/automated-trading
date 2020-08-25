@@ -98,6 +98,7 @@ class AnOrder(ABC, ReprAble):
 
     @property
     def outside_rth(self):
+        # TODO: test for sim and IB
         return self._outside_rth
 
 

@@ -73,6 +73,7 @@ class IBDataStreamer(ADataStreamer, IBBase):
         def bars_update(
             bars_: BarDataList, has_new_bar: bool, contract_: AContract,
         ):
+            # TODO: make sure that correct bar is received in test cases
             assert contract_ in self._bars_subscriptions
             if not has_new_bar:
                 return

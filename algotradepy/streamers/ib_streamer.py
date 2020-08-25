@@ -120,14 +120,13 @@ class IBDataStreamer(ADataStreamer, IBBase):
 
         found = False
         for sub_contract, sub_dict in self._bars_subscriptions.items():
-            if contract == sub_contract and func in sub_dict:
+            if contract == sub_contract and func in sub_dict["funcs"]:
                 found = True
-                del sub_dict[func]
-                if len(sub_dict) == 1:
+                del sub_dict["funcs"][func]
+                if len(sub_dict["funcs"]) == 0:
                     self._cancel_bars_subscription(
                         bars=sub_dict["bars"], contract=contract,
                     )
-                    del sub_dict["bars"]
                 break
 
         if not found:

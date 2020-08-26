@@ -47,8 +47,10 @@ class IBHistoricalProvider(IBBase, AHistoricalProvider):
         )
         data = util.df(objs=bar_data)
 
-        if len(data) != 0:
+        if data is not None and len(data) != 0:
             data = self._format_data(data=data)
+        else:
+            data = pd.DataFrame()
 
         return data
 

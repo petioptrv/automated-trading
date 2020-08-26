@@ -60,6 +60,10 @@ class AnOrder(ABC, ReprAble):
         conditions: Optional[List[ACondition]] = None,
         parent_id: Optional[int] = None,
         outside_rth: bool = False,
+        transmit: bool = True,
+        oca_group: str = "",
+        oca_type: int = 0,
+        order_ref: str = "",
     ):
         super().__init__()
         self._order_id = order_id
@@ -71,6 +75,10 @@ class AnOrder(ABC, ReprAble):
         self._conditions = conditions
         self._parent_id = parent_id
         self._outside_rth = outside_rth
+        self._transmit = transmit
+        self._oca_group = oca_group
+        self._oca_type = oca_type
+        self._order_ref = order_ref
 
     @property
     def order_id(self) -> int:
@@ -100,6 +108,22 @@ class AnOrder(ABC, ReprAble):
     def outside_rth(self):
         # TODO: test for sim and IB
         return self._outside_rth
+
+    @property
+    def transmit(self):
+        return self._transmit
+
+    @property
+    def oca_group(self):
+        return self._oca_group
+
+    @property
+    def oca_type(self):
+        return self._oca_type
+
+    @property
+    def order_ref(self):
+        return self._order_ref
 
 
 class MarketOrder(AnOrder):

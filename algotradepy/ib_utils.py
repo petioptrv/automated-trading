@@ -240,6 +240,10 @@ class IBBase:
                 action=order_action,
                 quantity=ib_order.totalQuantity,
                 parent_id=parent_id,
+                transmit=ib_order.transmit,
+                oca_group=ib_order.ocaGroup,
+                oca_type=ib_order.ocaType,
+                order_ref=ib_order.orderRef,
             )
         elif (
             isinstance(ib_order, _IBLimitOrder) or ib_order.orderType == "LMT"
@@ -250,6 +254,10 @@ class IBBase:
                 quantity=ib_order.totalQuantity,
                 limit_price=ib_order.lmtPrice,
                 parent_id=parent_id,
+                transmit=ib_order.transmit,
+                oca_group=ib_order.ocaGroup,
+                oca_type=ib_order.ocaType,
+                order_ref=ib_order.orderRef,
             )
         elif ib_order.orderType == "TRAIL":
             aux_price = ib_order.auxPrice
@@ -269,6 +277,10 @@ class IBBase:
                 aux_price=aux_price,
                 trail_percent=trail_percent,
                 parent_id=parent_id,
+                transmit=ib_order.transmit,
+                oca_group=ib_order.ocaGroup,
+                oca_type=ib_order.ocaType,
+                order_ref=ib_order.orderRef,
             )
         else:
             logging.warning(
@@ -318,6 +330,10 @@ class IBBase:
             ib_order.conditions.append(ib_cond)
 
         ib_order.outsideRth = order.outside_rth
+        ib_order.transmit = order.transmit
+        ib_order.ocaGroup = order.oca_group
+        ib_order.ocaType = order.oca_type
+        ib_order.orderRef = order.order_ref
 
         return ib_order
 

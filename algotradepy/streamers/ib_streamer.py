@@ -107,7 +107,7 @@ class IBDataStreamer(ADataStreamer, IBBase):
                 endDateTime="",
                 durationStr=ib_duration,
                 barSizeSetting=ib_bar_size,
-                whatToShow="MIDPOINT",
+                whatToShow="TRADES",
                 useRTH=rth,
                 keepUpToDate=True,
             )

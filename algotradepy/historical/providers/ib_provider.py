@@ -42,7 +42,7 @@ class IBHistoricalProvider(IBBase, AHistoricalProvider):
             endDateTime=end_date,
             durationStr=duration,
             barSizeSetting=bar_size_str,
-            whatToShow="MIDPOINT",
+            whatToShow="TRADES",
             useRTH=False,
         )
         data = util.df(objs=bar_data)

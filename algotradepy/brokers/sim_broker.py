@@ -326,7 +326,12 @@ class SimulationBroker(ABroker, ASimulationPiece):
             new_position_size = curr_pos.position + n_shares
             prev_price = curr_pos.position * curr_pos.ave_fill_price
             curr_price = n_shares * fill_price
-            new_ave_fill_price = (prev_price + curr_price) / new_position_size
+            if new_position_size != 0:
+                new_ave_fill_price = (
+                    prev_price + curr_price
+                ) / new_position_size
+            else:
+                new_ave_fill_price = 0
 
         new_position = Position(
             account=account,

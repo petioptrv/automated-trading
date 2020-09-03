@@ -226,14 +226,6 @@ def test_open_positions(
         non_master_ib_test_broker.sleep()
 
 
-def test_subscribe_to_new_trades_non_master_raises(non_master_broker):
-    def dummy_fn(*_, **__):
-        pass
-
-    with pytest.raises(AttributeError):
-        master_broker.subscribe_to_new_trades(func=dummy_fn)
-
-
 def test_subscribe_to_new_tws_trades(
     master_broker,
     non_master_ib_test_broker,
@@ -302,14 +294,6 @@ def test_subscribe_to_new_tws_trades(
     assert order.action == OrderAction.SELL
     assert order.quantity == 2
     assert order.limit_price == 1000
-
-
-def test_subscribe_to_trade_updates_non_master_raises(non_master_broker):
-    def dummy_fn(*_, **__):
-        pass
-
-    with pytest.raises(ValueError):
-        non_master_broker.subscribe_to_trade_updates(func=dummy_fn)
 
 
 def test_subscribe_to_tws_trade_updates(
@@ -405,13 +389,6 @@ def request_manual_input(msg):
     from tkinter import messagebox
 
     messagebox.showwarning(title="Manual Input Request", message=msg)
-
-
-def test_get_position_non_master_id_raises(
-    non_master_broker, spy_stock_contract,
-):
-    with pytest.raises(AttributeError):
-        non_master_broker.get_position(contract=spy_stock_contract)
 
 
 def test_get_position(

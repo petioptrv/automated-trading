@@ -117,12 +117,6 @@ class IBBroker(IBBase, ABroker):
     def subscribe_to_trade_updates(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
-        if self._ib_conn.client_id != 0:
-            raise ValueError(
-                f"Cannot subscribe to trade updates with a client id"
-                f" {self._ib_conn.client_id}."
-            )
-
         if fn_kwargs is None:
             fn_kwargs = {}
 
@@ -136,12 +130,6 @@ class IBBroker(IBBase, ABroker):
     def subscribe_to_position_updates(
         self, func: Callable, fn_kwargs: Optional[Dict] = None,
     ):
-        if self._ib_conn.client_id != 0:
-            raise ValueError(
-                f"Cannot subscribe to position updates with a client id"
-                f" {self._ib_conn.client_id}."
-            )
-
         if fn_kwargs is None:
             fn_kwargs = {}
 
@@ -188,13 +176,6 @@ class IBBroker(IBBase, ABroker):
         account: Optional[str] = None,
         **kwargs,
     ) -> float:
-        if self._ib_conn.client_id != MASTER_CLIENT_ID:
-            raise AttributeError(
-                f"This client ID cannot request positions. Please use a broker"
-                f" instantiated with the master client ID ({MASTER_CLIENT_ID})"
-                f" to request positions."
-            )
-
         if account is None:
             account = ""
 

@@ -39,6 +39,7 @@ class Exchange(Enum):
         * AMEX
         * ARCA
         * TSE
+        * BATS
 
     * Europe
 
@@ -71,6 +72,7 @@ class Exchange(Enum):
     ARCA = "ARCA"
     TSE = "TSE"
     VENTURE = "VENTURE"
+    BATS = "BATS"
 
     # Europe
     FWB = "FWB"

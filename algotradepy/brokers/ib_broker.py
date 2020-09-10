@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional, Tuple, Dict, List, Callable
 
 from algotradepy.ib_utils import IBBase
-from algotradepy.objects import Position
+from algotradepy.objects import Position, PnL
 
 try:
     import ib_insync
@@ -192,6 +192,14 @@ class IBBroker(IBBase, ABroker):
                 break
 
         return pos
+
+    def get_position_pnl(self, position: Position) -> PnL:
+        contract = position.contract
+        ib_pnl = self._ib_conn.reqPnLSingle(
+            account=position.account, modelCode="", conId=contract.con_id
+        )
+        pnl = self._from_ib_pnl(ib_pnl=ib_pnl)
+        return pnl
 
     def get_transaction_fee(self) -> float:
         # TODO: implement

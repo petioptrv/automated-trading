@@ -95,3 +95,24 @@ class Greeks(ReprAble, Comparable):
     @property
     def theta(self):
         return self._theta
+
+
+class PnL(ReprAble, Comparable):
+    def __init__(
+        self, daily_pnl: float, unrealized_pnl: float, realized_pnl: float
+    ):
+        self._daily_pnl = daily_pnl
+        self._unrealized_pnl = unrealized_pnl
+        self._realized_pnl = realized_pnl
+
+    @property
+    def daily_pnl(self):
+        return self._daily_pnl
+
+    @property
+    def unrealized_pnl(self):
+        return self._unrealized_pnl
+
+    @property
+    def realized_pnl(self):
+        return self._realized_pnl

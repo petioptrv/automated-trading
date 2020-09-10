@@ -63,8 +63,8 @@ class ADataStreamer(ABC):
         contract : AContract
             The contract definition for which to request price updates.
         func : Callable
-            The callback function. It must accept a float as its sole positional
-            argument.
+            The callback function. It must accept a contract and a float value
+            as its sole positional arguments.
         fn_kwargs : dict
             The keyword arguments to pass to the callback function along with
             the positional arguments.

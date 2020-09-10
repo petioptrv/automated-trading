@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional, Type
 import logging
 
-from algotradepy.objects import Position, Greeks
+from algotradepy.objects import Position, Greeks, PnL
 
 try:
     import ib_insync
@@ -581,3 +581,12 @@ class IBBase:
                 f"Got invalid bar size {bar_size}."
                 f" Valid bar sizes are {valid_sizes}."
             )
+
+    @staticmethod
+    def _from_ib_pnl(ib_pnl: ib_insync.PnLSingle) -> PnL:
+        pnl = PnL(
+            daily_pnl=ib_pnl.dailyPnL,
+            unrealized_pnl=ib_pnl.unrealizedPnL,
+            realized_pnl=ib_pnl.realizedPnL,
+        )
+        return pnl

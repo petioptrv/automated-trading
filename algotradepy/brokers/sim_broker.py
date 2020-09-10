@@ -4,7 +4,7 @@ from typing import Callable, Optional, Dict, Tuple, List
 
 from algotradepy.brokers.base import ABroker
 from algotradepy.contracts import AContract, Currency
-from algotradepy.objects import Position
+from algotradepy.objects import Position, PnL
 from algotradepy.orders import (
     LimitOrder,
     OrderAction,
@@ -220,6 +220,15 @@ class SimulationBroker(ABroker, ASimulationPiece):
         # TODO: test
         # TODO: implement for Limit and Stop Loss Orders
         self._scheduled_trade_executions.append((trade, price, n_shares),)
+
+    def get_position_pnl(self, position: Position) -> PnL:
+        # todo: fix this
+        pnl = PnL(
+            daily_pnl=float("nan"),
+            unrealized_pnl=float("nan"),
+            realized_pnl=float("nan"),
+        )
+        return pnl
 
     # -------------------------- Helpers ---------------------------------------
 

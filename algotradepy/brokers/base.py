@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Callable, Optional, Dict, Tuple, List
 
 from algotradepy.contracts import AContract
+from algotradepy.objects import Position, PnL
 from algotradepy.trade import Trade
 
 
@@ -169,3 +170,7 @@ class ABroker(ABC):
             The cost per transaction.
         """
         raise NotImplementedError
+
+    @abstractmethod
+    def get_position_pnl(self, position: Position) -> PnL:
+        """"""

@@ -322,7 +322,7 @@ class HistoricalRetriever:
                         schema_v=AHistoricalProvider.BARS_SCHEMA_V,
                     )
 
-        if rth and not is_daily(bar_size=bar_size):
+        if rth and not is_daily(bar_size=bar_size) and len(data) != 0:
             data = data.between_time(
                 start_time=time(9, 30), end_time=time(16), include_end=False,
             )

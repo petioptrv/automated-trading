@@ -130,7 +130,7 @@ class SimulationDataStreamer(ADataStreamer, ASimulationPiece):
     # ------------------------- Sim Methods ------------------------------------
 
     def step(self, cache_only: bool = True):
-        self._update_tick_subscribers()
+        self._update_tick_subscribers(cache_only=cache_only)
         self._maybe_update_bar_subscribers()
 
     def get_bar(self, contract: AContract, bar_size: timedelta,) -> pd.Series:
@@ -144,14 +144,28 @@ class SimulationDataStreamer(ADataStreamer, ASimulationPiece):
         for func, fn_kwargs in con_dict.items():
             func(greeks, **fn_kwargs)
 
+    def simulate_tick_update(
+        self, contract: AContract, price: float, price_type: PriceType
+    ):
+        callbacks = self._tick_callback_table[contract]
+
+        for func, fn_dict in callbacks.items():
+            if fn_dict["price_type"] == price_type:
+                func(contract, price, **fn_dict["fn_kwargs"])
+
     # -------------------------- Helpers ---------------------------------------
 
-    def _update_tick_subscribers(self):
+    def _update_tick_subscribers(self, cache_only: bool = True):
         data = pd.DataFrame()
 
         for contract, _ in self._tick_callback_table.items():
-            symbol_data = self._get_tick_data(contract=contract)
+            symbol_data = self._get_tick_data(
+                contract=contract, cache_only=cache_only
+            )
             data = data.append(symbol_data)
+
+        if len(data) == 0:
+            return
 
         data = data.sort_index(axis=0, level=1)
 
@@ -168,10 +182,14 @@ class SimulationDataStreamer(ADataStreamer, ASimulationPiece):
                     price = (row["ask"] + row["bid"]) / 2
                 func(contract, price, **fn_dict["fn_kwargs"])
 
-    def _get_tick_data(self, contract: AContract) -> pd.DataFrame:
+    def _get_tick_data(
+        self, contract: AContract, cache_only: bool = True
+    ) -> pd.DataFrame:
         curr_dt = self.sim_clock.datetime
         prev_dt = curr_dt - timedelta(seconds=1)
-        symbol_data = self._get_data(contract=contract, bar_size=timedelta(0),)
+        symbol_data = self._get_data(
+            contract=contract, bar_size=timedelta(0), cache_only=cache_only
+        )
         symbol_data = symbol_data.loc[prev_dt:curr_dt]
         ml_index = pd.MultiIndex.from_product([[contract], symbol_data.index])
         symbol_data.index = ml_index
@@ -207,9 +225,11 @@ class SimulationDataStreamer(ADataStreamer, ASimulationPiece):
                 func(bar, **fn_kwargs)
 
     def _get_latest_time_entry(
-        self, contract: AContract, bar_size: timedelta
+        self, contract: AContract, bar_size: timedelta, cache_only: bool = True
     ) -> pd.Series:
-        bar_data = self._get_data(contract=contract, bar_size=bar_size)
+        bar_data = self._get_data(
+            contract=contract, bar_size=bar_size, cache_only=cache_only
+        )
         curr_dt = self.sim_clock.datetime
         if is_daily(bar_size=bar_size):
             bar = bar_data.loc[pd.to_datetime(curr_dt.date())]
@@ -219,9 +239,11 @@ class SimulationDataStreamer(ADataStreamer, ASimulationPiece):
         return bar
 
     def _get_next_bar(
-        self, contract: AContract, bar_size: timedelta,
+        self, contract: AContract, bar_size: timedelta, cache_only: bool = True
     ) -> pd.Series:
-        bar_data = self._get_data(contract=contract, bar_size=bar_size)
+        bar_data = self._get_data(
+            contract=contract, bar_size=bar_size, cache_only=cache_only
+        )
         curr_dt = self.sim_clock.datetime
         if is_daily(bar_size=bar_size):
             curr_dt += bar_size
@@ -233,7 +255,7 @@ class SimulationDataStreamer(ADataStreamer, ASimulationPiece):
         return bar
 
     def _get_data(
-        self, contract: AContract, bar_size: timedelta,
+        self, contract: AContract, bar_size: timedelta, cache_only: bool = True
     ) -> pd.DataFrame:
         symbol_data = self._local_cache.get(contract)
         if symbol_data is None:
@@ -248,7 +270,7 @@ class SimulationDataStreamer(ADataStreamer, ASimulationPiece):
                 bar_size=bar_size,
                 start_date=self.sim_clock.start_date,
                 end_date=end_date,
-                cache_only=self._hist_cache_only,
+                cache_only=cache_only,
             )
             symbol_data[bar_size] = bar_data
 

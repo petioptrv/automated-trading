@@ -54,6 +54,18 @@ class ABroker(ABC):
         """Returns all currently open trades placed in the ongoing session."""
         raise NotImplementedError
 
+    @property
+    @abstractmethod
+    def open_positions(self) -> List[Position]:
+        """Returns all currently open positions."""
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def open_option_positions(self) -> List[Position]:
+        """Returns all currently open option positions."""
+        raise NotImplementedError
+
     @abstractmethod
     def sleep(self, secs: float):
         """Allows the server to deliver data."""
@@ -174,3 +186,4 @@ class ABroker(ABC):
     @abstractmethod
     def get_position_pnl(self, position: Position) -> PnL:
         """"""
+        raise NotImplementedError

@@ -1,8 +1,15 @@
+from datetime import date
+
 import pytest
 import numpy as np
 
 from algotradepy.brokers.sim_broker import SimulationBroker, DEFAULT_SIM_ACC
-from algotradepy.contracts import StockContract, Currency
+from algotradepy.contracts import (
+    StockContract,
+    Currency,
+    OptionContract,
+    Right,
+)
 from algotradepy.objects import Position
 from algotradepy.orders import MarketOrder, OrderAction, LimitOrder
 from algotradepy.streamers.sim_streamer import SimulationDataStreamer
@@ -205,3 +212,90 @@ def test_subscribe_to_position_updates():
     assert updated_pos.position == 12
     assert updated_pos.ave_fill_price == target_ave_price
     assert updated_pos.account == DEFAULT_SIM_ACC
+
+
+def test_open_position_single_position():
+    con = StockContract(symbol="SPY")
+    pos = Position(
+        account=DEFAULT_SIM_ACC,
+        contract=con,
+        position=10,
+        ave_fill_price=345.6,
+    )
+    starting_positions = {
+        DEFAULT_SIM_ACC: {con: pos},
+    }
+    sim_broker = SimulationBroker(
+        sim_streamer=SimulationDataStreamer(),
+        starting_funds={Currency.USD: 10_000},
+        transaction_cost=1,
+        starting_positions=starting_positions,
+    )
+    positions = sim_broker.open_positions
+
+    assert len(positions) == 1
+
+
+def test_open_position_multiple_position():
+    con = StockContract(symbol="SPY")
+    pos = Position(
+        account=DEFAULT_SIM_ACC,
+        contract=con,
+        position=10,
+        ave_fill_price=345.6,
+    )
+    pos2 = Position(
+        account=f"{DEFAULT_SIM_ACC}2",
+        contract=con,
+        position=10,
+        ave_fill_price=345.6,
+    )
+    starting_positions = {
+        DEFAULT_SIM_ACC: {con: pos},
+        f"{DEFAULT_SIM_ACC}2": {con: pos2},
+    }
+    sim_broker = SimulationBroker(
+        sim_streamer=SimulationDataStreamer(),
+        starting_funds={Currency.USD: 10_000},
+        transaction_cost=1,
+        starting_positions=starting_positions,
+    )
+    positions = sim_broker.open_positions
+
+    assert len(positions) == 2
+
+
+def test_open_option_positions():
+    con = StockContract(symbol="SPY")
+    pos = Position(
+        account=DEFAULT_SIM_ACC,
+        contract=con,
+        position=10,
+        ave_fill_price=345.6,
+    )
+    con = OptionContract(
+        symbol="SPY",
+        strike=340,
+        right=Right.CALL,
+        multiplier=100,
+        last_trade_date=date(2020, 10, 11),
+    )
+    pos2 = Position(
+        account=f"{DEFAULT_SIM_ACC}2",
+        contract=con,
+        position=10,
+        ave_fill_price=345.6,
+    )
+    starting_positions = {
+        DEFAULT_SIM_ACC: {con: pos},
+        f"{DEFAULT_SIM_ACC}2": {con: pos2},
+    }
+    sim_broker = SimulationBroker(
+        sim_streamer=SimulationDataStreamer(),
+        starting_funds={Currency.USD: 10_000},
+        transaction_cost=1,
+        starting_positions=starting_positions,
+    )
+    positions = sim_broker.open_option_positions
+
+    assert len(positions) == 1

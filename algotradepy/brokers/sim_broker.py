@@ -3,7 +3,7 @@ import time as real_time
 from typing import Callable, Optional, Dict, Tuple, List
 
 from algotradepy.brokers.base import ABroker
-from algotradepy.contracts import AContract, Currency
+from algotradepy.contracts import AContract, Currency, OptionContract
 from algotradepy.objects import Position, PnL
 from algotradepy.orders import (
     LimitOrder,
@@ -58,9 +58,7 @@ class SimulationBroker(ABroker, ASimulationPiece):
         # {account: {contract: Position}}
         self._positions: Dict[str, Dict[AContract, Position]] = {}
         if starting_positions is not None:
-            self._positions = recursive_dict_update(
-                receiver=self._positions, updater=starting_positions,
-            )
+            self._positions = starting_positions
         self._abs_fee = transaction_cost
         self._valid_id = 1
         self._new_trade_subscribers = []
@@ -96,8 +94,21 @@ class SimulationBroker(ABroker, ASimulationPiece):
 
     @property
     def open_positions(self) -> List[Position]:
+        positions = []
+
+        for acc, acc_dict in self._positions.items():
+            for contract, position in acc_dict.items():
+                if position.position != 0:
+                    positions.append(position)
+
+        return positions
+
+    @property
+    def open_option_positions(self) -> List[Position]:
         positions = [
-            position for contract, position in self._positions.items()
+            position
+            for position in self.open_positions
+            if isinstance(position.contract, OptionContract)
         ]
         return positions
 
@@ -229,6 +240,9 @@ class SimulationBroker(ABroker, ASimulationPiece):
             realized_pnl=float("nan"),
         )
         return pnl
+
+    def set_positions(self, positions: Dict[str, Dict[AContract, Position]]):
+        self._positions = positions
 
     # -------------------------- Helpers ---------------------------------------
 

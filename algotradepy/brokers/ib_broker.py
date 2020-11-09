@@ -26,6 +26,7 @@ from algotradepy.connectors.ib_connector import (
 from algotradepy.contracts import (
     AContract,
     are_loosely_equal_contracts,
+    OptionContract,
 )
 from algotradepy.trade import Trade
 
@@ -54,6 +55,7 @@ class IBBroker(IBBase, ABroker):
     ):
         ABroker.__init__(self, simulation=simulation)
         IBBase.__init__(self, simulation=simulation, ib_connector=ib_connector)
+        self._requested_pnl = []
 
     @property
     def acc_cash(self) -> float:
@@ -99,6 +101,16 @@ class IBBroker(IBBase, ABroker):
         positions = [
             self._from_ib_position(ib_position=ib_pos)
             for ib_pos in ib_positions
+        ]
+        return positions
+
+    @property
+    def open_option_positions(self) -> List[Position]:
+        # todo: test
+        positions = [
+            position
+            for position in self.open_positions
+            if isinstance(position.contract, OptionContract)
         ]
         return positions
 
@@ -195,9 +207,18 @@ class IBBroker(IBBase, ABroker):
 
     def get_position_pnl(self, position: Position) -> PnL:
         contract = position.contract
-        ib_pnl = self._ib_conn.reqPnLSingle(
-            account=position.account, modelCode="", conId=contract.con_id
-        )
+        key = (position.account, contract.con_id)
+
+        if key in self._requested_pnl:
+            ib_pnl = self._ib_conn.pnlSingle(
+                account=position.account, modelCode="", conId=contract.con_id
+            )[0]
+        else:
+            ib_pnl = self._ib_conn.reqPnLSingle(
+                account=position.account, modelCode="", conId=contract.con_id
+            )
+            self._requested_pnl.append(key)
+
         pnl = self._from_ib_pnl(ib_pnl=ib_pnl)
         return pnl
 

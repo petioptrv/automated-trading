@@ -139,14 +139,14 @@ class IBBase:
         if con_id == 0:
             con_id = None
 
-        if isinstance(ib_contract, _IBStock):
+        if ib_contract.secType == "STK":
             contract = StockContract(
                 con_id=con_id,
                 symbol=ib_contract.symbol,
                 exchange=exchange,
                 currency=currency,
             )
-        elif isinstance(ib_contract, _IBOption):
+        elif ib_contract.secType == "OPT":
             last_trade_date = _get_opt_trade_date(
                 last_trade_date_str=ib_contract.lastTradeDateOrContractMonth,
             )
@@ -166,7 +166,7 @@ class IBBase:
                 exchange=exchange,
                 currency=currency,
             )
-        elif isinstance(ib_contract, _IBForex):
+        elif ib_contract.secType == "CASH":
             contract = ForexContract(
                 symbol=ib_contract.symbol,
                 con_id=con_id,
@@ -299,13 +299,16 @@ class IBBase:
     def _to_ib_order(self, order: AnOrder) -> _IBOrder:
         if isinstance(order, MarketOrder):
             ib_order = _IBMarketOrder(
-                action=order.action.value, totalQuantity=order.quantity,
+                action=order.action.value,
+                totalQuantity=order.quantity,
+                orderId=order.order_id,
             )
         elif isinstance(order, LimitOrder):
             ib_order = _IBLimitOrder(
                 action=order.action.value,
                 totalQuantity=order.quantity,
                 lmtPrice=round(order.limit_price, 2),
+                orderId=order.order_id,
             )
         elif isinstance(order, TrailingStopOrder):
             ib_trail_percent = order.trail_percent or UNSET_DOUBLE
@@ -318,6 +321,7 @@ class IBBase:
                 trailingPercent=ib_trail_percent,
                 trailStopPrice=ib_stop_price,
                 auxPrice=ib_aux_price,
+                orderId=order.order_id,
             )
         else:
             raise TypeError(f"Unknown type of order {type(order)}.")
@@ -435,8 +439,19 @@ class IBBase:
         chain_type = self._from_ib_conjunction(
             ib_conjunction=ib_condition.conjunction
         )
+        ib_con = _IBContract(
+            conId=ib_condition.conId, exchange=ib_condition.exch
+        )
+        ib_cons = self._ib_conn.qualifyContracts(ib_con)
+        if len(ib_cons) != 1:
+            raise ValueError(
+                f"Could not qualify IB contract with id"
+                f" {ib_condition.conId} and exchange {ib_condition.exch}."
+            )
+        ib_contract = ib_cons[0]
+        contract = self._from_ib_contract(ib_contract=ib_contract)
         condition = PriceCondition(
-            contract=None,
+            contract=contract,
             price=ib_condition.price,
             trigger_method=trigger_method,
             price_direction=direction,

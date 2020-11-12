@@ -50,7 +50,7 @@ def time_arithmetic(start_time: time, delta: timedelta,) -> time:
 
 
 def is_time_aware(dt) -> bool:
-    is_aware = dt.tzinfo is not None or dt.tzinfo.utcoffset(dt) is not None
+    is_aware = dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
     return is_aware
 
 

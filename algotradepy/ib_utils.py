@@ -3,6 +3,8 @@ from datetime import date, datetime, timedelta
 from typing import Optional, Type, List
 import logging
 
+from dateutil import parser as dt_parser
+
 from algotradepy.objects import Position, Greeks, PnL
 
 try:
@@ -480,7 +482,7 @@ class IBBase:
         return ib_cond
 
     def _from_ib_time_condition(
-        self, ib_condition: _IBTimeCondition, dt_parser=None
+        self, ib_condition: _IBTimeCondition
     ) -> DateTimeCondition:
         try:
             target_datetime = datetime.strptime(

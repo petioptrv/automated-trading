@@ -64,7 +64,7 @@ from algotradepy.orders import (
     TrailingStopOrder,
 )
 from algotradepy.trade import Trade, TradeState, TradeStatus
-from algotradepy.time_utils import is_time_aware
+from algotradepy.time_utils import is_time_aware, TZINFOS
 
 _IB_FULL_DATE_FORMAT = "%Y%m%d"
 _IB_MONTH_DATE_FORMAT = "%Y%m"
@@ -480,15 +480,15 @@ class IBBase:
         return ib_cond
 
     def _from_ib_time_condition(
-        self, ib_condition: _IBTimeCondition
+        self, ib_condition: _IBTimeCondition, dt_parser=None
     ) -> DateTimeCondition:
         try:
             target_datetime = datetime.strptime(
                 ib_condition.time, _IB_DATETIME_FORMAT
             )
         except ValueError:
-            target_datetime = datetime.strptime(
-                ib_condition.time, _IB_DATETIME_FORMAT_TZ
+            target_datetime = dt_parser.parse(
+                ib_condition.time, tzinfos=TZINFOS,
             )
         if ib_condition.isMore:
             time_direction = ConditionDirection.MORE

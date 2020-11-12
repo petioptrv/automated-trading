@@ -3,6 +3,19 @@ from typing import List
 
 import pandas_market_calendars as pmc
 import pandas as pd
+from dateutil.tz import gettz
+
+TZINFOS = {
+    "HKT": gettz("Asia/Hong_Kong"),
+    "JST": gettz("Asia/Tokyo"),
+    "AEST": gettz("Australia/Sydney"),
+    "CEST": gettz("CET"),
+    "CET": gettz("CET"),
+    "GMT": gettz("UTC"),
+    "BST": gettz("CET"),
+    "EST": gettz("EST"),
+    "EDT": gettz("EST"),
+}
 
 
 def generate_trading_days(start_date: date, end_date: date) -> List[date]:

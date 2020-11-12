@@ -1,6 +1,6 @@
 import calendar
 from datetime import date, datetime, timedelta
-from typing import Optional, Type
+from typing import Optional, Type, List
 import logging
 
 from algotradepy.objects import Position, Greeks, PnL
@@ -25,6 +25,7 @@ from ib_insync.order import (
     MarketOrder as _IBMarketOrder,
     LimitOrder as _IBLimitOrder,
     OrderStatus as _IBOrderStatus,
+    OrderCondition as _IBOrderCondition,
     PriceCondition as _IBPriceCondition,
     TimeCondition as _IBTimeCondition,
     ExecutionCondition as _IBExecutionCondition,
@@ -219,8 +220,7 @@ class IBBase:
 
         return ib_contract
 
-    @staticmethod
-    def _from_ib_order(ib_order: _IBOrder) -> Optional[AnOrder]:
+    def _from_ib_order(self, ib_order: _IBOrder) -> Optional[AnOrder]:
         # TODO: test
         if not isinstance(ib_order, _IBOrder):
             logging.warning(
@@ -233,6 +233,9 @@ class IBBase:
         else:
             order_action = OrderAction.SELL
         parent_id = ib_order.parentId if ib_order.parentId else None
+        conditions = self._from_ib_conditions(
+            ib_conditions=ib_order.conditions
+        )
 
         if isinstance(ib_order, _IBMarketOrder) or ib_order.orderType == "MKT":
             order = MarketOrder(
@@ -244,6 +247,7 @@ class IBBase:
                 oca_group=ib_order.ocaGroup,
                 oca_type=ib_order.ocaType,
                 order_ref=ib_order.orderRef,
+                conditions=conditions,
             )
         elif (
             isinstance(ib_order, _IBLimitOrder) or ib_order.orderType == "LMT"
@@ -258,6 +262,7 @@ class IBBase:
                 oca_group=ib_order.ocaGroup,
                 oca_type=ib_order.ocaType,
                 order_ref=ib_order.orderRef,
+                conditions=conditions,
             )
         elif ib_order.orderType == "TRAIL":
             aux_price = ib_order.auxPrice
@@ -281,6 +286,7 @@ class IBBase:
                 oca_group=ib_order.ocaGroup,
                 oca_type=ib_order.ocaType,
                 order_ref=ib_order.orderRef,
+                conditions=conditions,
             )
         else:
             logging.warning(
@@ -337,7 +343,18 @@ class IBBase:
 
         return ib_order
 
-    def _to_ib_condition(self, condition: ACondition):
+    def _from_ib_conditions(
+        self, ib_conditions: List[_IBOrderCondition]
+    ) -> List[ACondition]:
+        conditions = []
+
+        for ib_condition in ib_conditions:
+            condition = self._from_ib_condition(ib_condition=ib_condition)
+            conditions.append(condition)
+
+        return conditions
+
+    def _to_ib_condition(self, condition: ACondition) -> _IBOrderCondition:
         if isinstance(condition, PriceCondition):
             ib_cond = self._to_ib_price_condition(condition=condition)
         elif isinstance(condition, DateTimeCondition):
@@ -351,10 +368,30 @@ class IBBase:
 
         return ib_cond
 
+    def _from_ib_condition(
+        self, ib_condition: _IBOrderCondition
+    ) -> ACondition:
+        if isinstance(ib_condition, _IBPriceCondition):
+            condition = self._from_ib_price_condition(
+                ib_condition=ib_condition
+            )
+        elif isinstance(ib_condition, _IBTimeCondition):
+            condition = self._from_ib_time_condition(ib_condition=ib_condition)
+        elif isinstance(ib_condition, _IBExecutionCondition):
+            condition = self._from_ib_execution_condition(
+                ib_condition=ib_condition
+            )
+        else:
+            raise ValueError(f"Unknown condition type {type(ib_condition)}.")
+
+        return condition
+
     def _to_ib_price_condition(
         self, condition: PriceCondition,
     ) -> _IBPriceCondition:
-        conjunction = "a" if condition.chain_type == ChainType.AND else "o"
+        ib_conjunction = self._to_ib_conjunction(
+            chain_type=condition.chain_type
+        )
         ib_contract = self._to_ib_contract(contract=condition.contract)
         con_detail_defs = self._ib_conn.reqContractDetails(
             contract=ib_contract,
@@ -375,7 +412,7 @@ class IBBase:
             trigger_method=condition.trigger_method,
         )
         ib_cond = _IBPriceCondition(
-            conjunction=conjunction,
+            conjunction=ib_conjunction,
             isMore=is_more,
             price=condition.price,
             conId=con_def.conId,
@@ -385,10 +422,35 @@ class IBBase:
 
         return ib_cond
 
+    def _from_ib_price_condition(
+        self, ib_condition: _IBPriceCondition
+    ) -> PriceCondition:
+        trigger_method = self._from_ib_trigger_method(
+            ib_trigger_method=ib_condition.triggerMethod
+        )
+        if ib_condition.isMore:
+            direction = ConditionDirection.MORE
+        else:
+            direction = ConditionDirection.LESS
+        chain_type = self._from_ib_conjunction(
+            ib_conjunction=ib_condition.conjunction
+        )
+        condition = PriceCondition(
+            contract=None,
+            price=ib_condition.price,
+            trigger_method=trigger_method,
+            price_direction=direction,
+            chain_type=chain_type,
+        )
+
+        return condition
+
     def _to_ib_time_condition(
         self, condition: DateTimeCondition,
     ) -> _IBTimeCondition:
-        conjunction = "a" if condition.chain_type == ChainType.AND else "o"
+        ib_conjunction = self._to_ib_conjunction(
+            chain_type=condition.chain_type
+        )
         is_more = condition.time_direction == ConditionDirection.MORE
         dt = condition.target_datetime
         dt_format = _IB_DATETIME_FORMAT
@@ -397,10 +459,36 @@ class IBBase:
         ib_datetime_str = dt.strftime(dt_format)
         ib_datetime_str = self._validate_ib_dt_str(ib_dt_str=ib_datetime_str)
         ib_cond = _IBTimeCondition(
-            conjunction=conjunction, isMore=is_more, time=ib_datetime_str,
+            conjunction=ib_conjunction, isMore=is_more, time=ib_datetime_str,
         )
 
         return ib_cond
+
+    def _from_ib_time_condition(
+        self, ib_condition: _IBTimeCondition
+    ) -> DateTimeCondition:
+        try:
+            target_datetime = datetime.strptime(
+                ib_condition.time, _IB_DATETIME_FORMAT
+            )
+        except ValueError:
+            target_datetime = datetime.strptime(
+                ib_condition.time, _IB_DATETIME_FORMAT_TZ
+            )
+        if ib_condition.isMore:
+            time_direction = ConditionDirection.MORE
+        else:
+            time_direction = ConditionDirection.LESS
+        chain_type = self._from_ib_conjunction(
+            ib_conjunction=ib_condition.conjunction
+        )
+        condition = DateTimeCondition(
+            target_datetime=target_datetime,
+            time_direction=time_direction,
+            chain_type=chain_type,
+        )
+
+        return condition
 
     @staticmethod
     def _validate_ib_dt_str(ib_dt_str: str) -> str:
@@ -412,13 +500,15 @@ class IBBase:
     def _to_ib_execution_condition(
         self, condition: ExecutionCondition,
     ) -> _IBExecutionCondition:
-        conjunction = "a" if condition.chain_type == ChainType.AND else "o"
+        ib_conjunction = self._to_ib_conjunction(
+            chain_type=condition.chain_type
+        )
         ib_sec_type = self._to_ib_sec_type(
             contract_type=condition.contract_type,
         )
         ib_exchange = self._to_ib_exchange(exchange=condition.exchange)
         ib_cond = _IBExecutionCondition(
-            conjunction=conjunction,
+            conjunction=ib_conjunction,
             secType=ib_sec_type,
             exch=ib_exchange,
             symbol=condition.symbol,
@@ -426,10 +516,37 @@ class IBBase:
 
         return ib_cond
 
+    def _from_ib_execution_condition(
+        self, ib_condition: _IBExecutionCondition
+    ) -> ExecutionCondition:
+        contract_type = self._from_ib_sec_type(
+            ib_sec_type=ib_condition.secType
+        )
+        exchange = self._from_ib_exchange(ib_exchange=ib_condition.exch)
+        chain_type = self._from_ib_conjunction(
+            ib_conjunction=ib_condition.conjunction
+        )
+        condition = ExecutionCondition(
+            contract_type=contract_type,
+            exchange=exchange,
+            symbol=ib_condition.symbol,
+            chain_type=chain_type,
+        )
+        return condition
+
     @staticmethod
     def _to_ib_trigger_method(trigger_method: PriceTriggerMethod) -> int:
         ib_trigger_method = trigger_method.value
         return ib_trigger_method
+
+    @staticmethod
+    def _from_ib_trigger_method(ib_trigger_method: int) -> PriceTriggerMethod:
+        if ib_trigger_method == 8:
+            trigger_method = PriceTriggerMethod.MID_POINT
+        else:
+            raise ValueError(f"Unknown trigger method {ib_trigger_method}.")
+
+        return trigger_method
 
     @staticmethod
     def _to_ib_sec_type(contract_type: Type) -> str:
@@ -443,6 +560,20 @@ class IBBase:
             raise ValueError(f"Unrecognized contract type {contract_type}.")
 
         return ib_sec_type
+
+    @staticmethod
+    def _from_ib_sec_type(ib_sec_type: str) -> Type:
+        contract_type = None
+        if ib_sec_type == "STK":
+            contract_type = StockContract
+        elif ib_sec_type == "OPT":
+            contract_type = OptionContract
+        elif ib_sec_type == "CASH":
+            contract_type = ForexContract
+        else:
+            raise ValueError(f"Unrecognized security type {ib_sec_type}.")
+
+        return contract_type
 
     def _from_ib_status(self, ib_order_status: _IBOrderStatus) -> TradeStatus:
         state = self._from_ib_state(ib_state=ib_order_status.status)
@@ -590,3 +721,21 @@ class IBBase:
             realized_pnl=ib_pnl.realizedPnL,
         )
         return pnl
+
+    @staticmethod
+    def _from_ib_conjunction(ib_conjunction: str) -> ChainType:
+        if ib_conjunction == "a":
+            chain_type = ChainType.AND
+        else:
+            chain_type = ChainType.OR
+
+        return chain_type
+
+    @staticmethod
+    def _to_ib_conjunction(chain_type: ChainType) -> str:
+        if chain_type == ChainType.AND:
+            conjunction = "a"
+        else:
+            conjunction = "o"
+
+        return conjunction

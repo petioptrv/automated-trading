@@ -101,7 +101,7 @@ class AnOrder(ABC, ReprAble):
         return self._conditions
 
     @property
-    def parent_id(self):
+    def parent_id(self) -> Optional[int]:
         return self._parent_id
 
     @property

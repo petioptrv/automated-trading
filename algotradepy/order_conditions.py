@@ -1,6 +1,7 @@
 from abc import ABC
 from datetime import datetime as dt
 from enum import Enum
+from typing import Optional
 
 from algotradepy.contracts import Exchange, AContract
 
@@ -32,7 +33,7 @@ class ACondition(ABC):
 class PriceCondition(ACondition):
     def __init__(
         self,
-        contract: AContract,
+        contract: Optional[AContract],
         price: float,
         trigger_method: PriceTriggerMethod,
         price_direction: ConditionDirection,
@@ -45,7 +46,8 @@ class PriceCondition(ACondition):
         self._price_direction = price_direction
 
     @property
-    def contract(self) -> AContract:
+    def contract(self) -> Optional[AContract]:
+        """For internal use."""
         return self._contract
 
     @property

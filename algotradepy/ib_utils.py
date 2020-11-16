@@ -485,12 +485,12 @@ class IBBase:
         self, ib_condition: _IBTimeCondition
     ) -> DateTimeCondition:
         try:
-            target_datetime = datetime.strptime(
-                ib_condition.time, _IB_DATETIME_FORMAT
-            )
-        except ValueError:
             target_datetime = dt_parser.parse(
                 ib_condition.time, tzinfos=TZINFOS,
+            )
+        except ValueError:
+            target_datetime = datetime.strptime(
+                ib_condition.time, _IB_DATETIME_FORMAT
             )
         if ib_condition.isMore:
             time_direction = ConditionDirection.MORE

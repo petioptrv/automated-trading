@@ -87,10 +87,11 @@ class IBBroker(IBBase, ABroker):
     @property
     def open_trades(self) -> List[Trade]:
         # TODO: test
-        open_ib_trades = self._ib_conn.openTrades()
+        open_ib_trades = self._ib_conn.trades()
         open_trades = [
             self._from_ib_trade(ib_trade=ib_trade)
             for ib_trade in open_ib_trades
+            if ib_trade.orderStatus.status in ib_trade.orderStatus.ActiveStates
         ]
         return open_trades
 

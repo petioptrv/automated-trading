@@ -139,6 +139,9 @@ class SimulationBroker(ABroker, ASimulationPiece):
             fn_kwargs = {}
         self._position_updates_subscribers.append((func, fn_kwargs))
 
+    def validate_trade(self, trade: Trade) -> bool:
+        return True
+
     def place_trade(
         self,
         trade: Trade,

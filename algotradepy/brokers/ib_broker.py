@@ -152,6 +152,13 @@ class IBBroker(IBBase, ABroker):
 
         self._ib_conn.positionEvent += position_filter
 
+    def validate_trade(self, trade: Trade) -> bool:
+        ib_contract = self._to_ib_contract(contract=trade.contract)
+
+        cons = self._ib_conn.qualifyContracts(ib_contract)
+
+        return len(cons) == 1
+
     def place_trade(
         self, trade: Trade, *args, await_confirm: bool = False,
     ) -> Tuple[bool, Trade]:
@@ -166,13 +173,10 @@ class IBBroker(IBBase, ABroker):
         confirmed = False
         while await_confirm and not confirmed:
             status = ib_trade.orderStatus.status
-            if "Submitted" in status or status == "Filled":
-                placed = True
-                confirmed = True
-            elif "Cancelled" in status:
+            self.sleep(SERVER_BUFFER_TIME)
+            if "Cancelled" in status:
                 placed = False
                 confirmed = True
-            self.sleep(SERVER_BUFFER_TIME)
 
         trade = self._from_ib_trade(ib_trade=ib_trade)
 

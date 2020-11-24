@@ -130,6 +130,11 @@ class ABroker(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def validate_trade(self, trade: Trade) -> bool:
+        # todo: document
+        raise NotImplementedError
+
+    @abstractmethod
     def place_trade(self, trade: Trade, *args, **kwargs) -> Tuple[bool, Trade]:
         """Place a trade with specified details.
 

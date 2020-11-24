@@ -299,6 +299,7 @@ class IBBase:
         return order
 
     def _to_ib_order(self, order: AnOrder) -> _IBOrder:
+
         if isinstance(order, MarketOrder):
             ib_order = _IBMarketOrder(
                 action=order.action.value,
